@@ -24,7 +24,8 @@ def read_client_data(dataset, idx, is_train=True, few_shot=0):
         data_list = process_Shakespeare(data)
     else:
         data_list = process_image(data)
-
+        
+    # data_list里的元素的type
     if is_train and few_shot > 0:
         shot_cnt_dict = defaultdict(int)
         data_list_new = []

@@ -2,8 +2,8 @@ import torch
 import torch.nn.functional as F
 from torch import nn
 
-batch_size = 10
 
+batch_size = 10
 
 # split an original model into a base and a head
 class BaseHeadSplit(nn.Module):
@@ -196,6 +196,7 @@ class FedAvgMLP(nn.Module):
         x = self.act(self.fc1(x))
         x = self.fc2(x)
         return x
+    
 
 # ====================================================================================================================
 

@@ -35,6 +35,97 @@ def check(config_path, train_path, test_path, num_clients, niid=False,
 
     return False
 
+def separate_data1(data, num_clients, num_classes, niid=False, balance=False, partition=None, class_per_client=None):
+    X = [[] for _ in range(num_clients)]
+    y = [[] for _ in range(num_clients)]
+    statistic = [[] for _ in range(num_clients)]
+
+    dataset_content, dataset_label = data
+    # guarantee that each client must have at least one batch of data for testing. 
+    least_samples = int(min(batch_size / (1-train_ratio), len(dataset_label) / num_clients / 2))
+
+    dataidx_map = {}
+
+    if not niid:
+        partition = 'pat'
+        class_per_client = num_classes
+
+    if partition == 'pat':
+        idxs = np.array(range(len(dataset_label)))
+        idx_for_each_class = []
+        for i in range(num_classes):
+            idx_for_each_class.append(idxs[dataset_label == i])
+
+        # 修改部分：为每个客户端随机分配5、6或7个类别
+        if class_per_client is None:
+            # 随机生成每个客户端的类别数量（3,4,5）
+            class_num_per_client = np.random.choice([5, 4,3], num_clients).tolist()
+        else:
+            class_num_per_client = [class_per_client for _ in range(num_clients)]
+        
+        # 检查类别分配是否合理
+        total_classes_assigned = sum(class_num_per_client)
+        if total_classes_assigned < num_classes:
+            raise ValueError(f"分配的类别总数({total_classes_assigned})少于数据集中存在的类别数({num_classes})")
+        
+        # 为每个类别选择要分配的客户端
+        client_class_assignments = [[] for _ in range(num_classes)]
+        
+        # 为每个客户端随机选择类别
+        for client in range(num_clients):
+            num_classes_for_client = class_num_per_client[client]
+            # 随机选择该客户端拥有的类别
+            selected_classes = np.random.choice(num_classes, num_classes_for_client, replace=False)
+            for class_id in selected_classes:
+                client_class_assignments[class_id].append(client)
+        
+        # 分配数据
+        for i in range(num_classes):
+            selected_clients = client_class_assignments[i]
+            if len(selected_clients) == 0:
+                continue
+                
+            num_all_samples = len(idx_for_each_class[i])
+            num_selected_clients = len(selected_clients)
+            num_per = num_all_samples / num_selected_clients
+            
+            if balance:
+                num_samples = [int(num_per) for _ in range(num_selected_clients-1)]
+            else:
+                num_samples = np.random.randint(max(num_per/10, least_samples/num_classes), num_per, num_selected_clients-1).tolist()
+            num_samples.append(num_all_samples-sum(num_samples))
+
+            idx = 0
+            for client, num_sample in zip(selected_clients, num_samples):
+                if client not in dataidx_map.keys():
+                    dataidx_map[client] = idx_for_each_class[i][idx:idx+num_sample]
+                else:
+                    dataidx_map[client] = np.append(dataidx_map[client], idx_for_each_class[i][idx:idx+num_sample], axis=0)
+                idx += num_sample
+    
+    else:
+        raise NotImplementedError
+
+    # assign data
+    for client in range(num_clients):
+        idxs = dataidx_map[client]
+        X[client] = dataset_content[idxs]
+        y[client] = dataset_label[idxs]
+
+        for i in np.unique(y[client]):
+            statistic[client].append((int(i), int(sum(y[client]==i))))
+            
+
+    del data
+    # gc.collect()
+
+    for client in range(num_clients):
+        print(f"Client {client}\t Size of data: {len(X[client])}\t Labels: ", np.unique(y[client]))
+        print(f"\t\t Samples of labels: ", [i for i in statistic[client]])
+        print("-" * 50)
+
+    return X, y, statistic
+
 def separate_data(data, num_clients, num_classes, niid=False, balance=False, partition=None, class_per_client=None):
     X = [[] for _ in range(num_clients)]
     y = [[] for _ in range(num_clients)]

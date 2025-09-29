@@ -1,2 +1,8 @@
 dataset/MNIST/
 docs/*
+system/flcore/clients/__pycache__/*
+system/flcore/servers/__pycache__/*
+**/__pycache__/
+*.pyc
+*.pt
+*.h5

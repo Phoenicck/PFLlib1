@@ -94,6 +94,8 @@ class Client(object):
                     x[0] = x[0].to(self.device)
                 else:
                     x = x.to(self.device)
+                # print("x type:", type(x), "x shape:", x.shape)
+                # print("y type:", type(y), "y shape:", y.shape)
                 y = y.to(self.device)
                 output = self.model(x)
 
