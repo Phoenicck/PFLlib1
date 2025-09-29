@@ -10,6 +10,7 @@ import torchvision
 import logging
 
 from flcore.servers.serveravg import FedAvg
+from flcore.servers.serverp1 import Fedp1
 
 from flcore.trainmodel.models import *
 
@@ -68,6 +69,15 @@ def run(args):
         elif model_str == "CNN": # non-convex
             if "MNIST" in args.dataset:
                 args.model = FedAvgCNN(in_features=1, num_classes=args.num_classes, dim=1024).to(args.device)
+            elif "Cifar10" in args.dataset:
+                args.model = FedAvgCNN(in_features=3, num_classes=args.num_classes, dim=1600).to(args.device)
+            elif "Omniglot" in args.dataset:
+                args.model = FedAvgCNN(in_features=1, num_classes=args.num_classes, dim=33856).to(args.device)
+                # args.model = CifarNet(num_classes=args.num_classes).to(args.device)
+            elif "Digit5" in args.dataset:
+                args.model = Digit5CNN().to(args.device)
+            else:
+                args.model = FedAvgCNN(in_features=3, num_classes=args.num_classes, dim=10816).to(args.device)
         else:
             raise NotImplementedError
 
@@ -80,6 +90,11 @@ def run(args):
             args.model = BaseHeadSplit(args.model, args.head)
             server = FedAvg(args, i)
             
+        if args.algorithm == "Fedp1":
+            args.head = copy.deepcopy(args.model.fc)
+            args.model.fc = nn.Identity()
+            args.model = BaseHeadSplit(args.model, args.head)
+            server = Fedp1(args, i)
 
         else:
             raise NotImplementedError

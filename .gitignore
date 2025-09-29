@@ -1,4 +1,5 @@
 dataset/MNIST/
+dataset/Cifar10/
 docs/*
 system/flcore/clients/__pycache__/*
 system/flcore/servers/__pycache__/*
