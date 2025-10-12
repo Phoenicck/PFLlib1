@@ -8,7 +8,7 @@ from flcore.clients.clientbase import Client
 class Clientp1(Client):
     def __init__(self, args, id, train_samples, test_samples, **kwargs):
         super().__init__(args, id, train_samples, test_samples, **kwargs)
-        print("\nClient p1 initialized.")
+        #print("\nClient p1 initialized.")
 
     def train(self):
         trainloader = self.load_train_data()

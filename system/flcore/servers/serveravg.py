@@ -147,3 +147,4 @@ class FedAvg(Server):
         print(f"Load model from {model_path}")
         assert (os.path.exists(model_path))
         self.global_model = torch.load(model_path)
+        
