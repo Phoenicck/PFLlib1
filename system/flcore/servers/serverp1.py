@@ -20,11 +20,20 @@ class Fedp1(Server):
 
         # self.load_model()
         self.Budget = []
-        # add
+        # p1
         self.best_acc = 0
+        self.p1_global_soft_labels = None  # 全局软标签
+
 
 
     def train(self):
+        if self.p1_global_soft_labels is None:
+            # 初始化全局软标签
+            self.p1_global_soft_labels = [None for _ in range(self.num_clients)]
+            for client in self.clients:
+                client.compute_local_soft_labels()
+                self.p1_global_soft_labels[client.id] = copy.deepcopy(client.local_soft_labels)
+
         for i in range(self.global_rounds+1):
             s_t = time.time()
             self.selected_clients = self.select_clients()

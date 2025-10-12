@@ -100,7 +100,7 @@ def run(args):
             raise NotImplementedError
 
         if args.goal == "test":
-            server.test()
+            server.test(args.epoch)
         elif args.goal == "train":
             server.train()
 
@@ -233,6 +233,9 @@ if __name__ == "__main__":
     parser.add_argument('-ca', "--fedcross_alpha", type=float, default=0.99)
     parser.add_argument('-cmss', "--collaberative_model_select_strategy", type=int, default=1)
 
+    # add
+    parser.add_argument('-epoch', "--epoch", type=int, default=None,
+                        help="The epoch of the model to be loaded for testing")
 
     args = parser.parse_args()
 
