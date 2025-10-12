@@ -8,6 +8,8 @@ import warnings
 import numpy as np
 import torchvision
 import logging
+import sys
+import datetime
 
 from flcore.servers.serveravg import FedAvg
 from flcore.servers.serverp1 import Fedp1
@@ -23,8 +25,7 @@ from flcore.trainmodel.transformer import *
 from utils.result_utils import average_data
 from utils.mem_utils import MemReporter
 
-logger = logging.getLogger()
-logger.setLevel(logging.ERROR)
+
 
 warnings.simplefilter("ignore")
 torch.manual_seed(0)
@@ -117,7 +118,16 @@ def run(args):
     reporter.report()
 
 
+class PrintLogger:
+    def write(self, message):
+        if message.strip():
+            logging.info(message.strip())
+    def flush(self):
+        pass
+
 if __name__ == "__main__":
+    
+
     total_start = time.time()
 
     parser = argparse.ArgumentParser()
@@ -240,6 +250,24 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     os.environ["CUDA_VISIBLE_DEVICES"] = args.device_id
+
+    #日志
+    
+    # now_str = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    # # 动态生成日志文件名
+    # log_filename = f"../log_record/{args.algorithm}_{args.dataset}_{now_str}.txt"
+
+    # logging.basicConfig(
+    #     level=logging.INFO,
+    #     format='%(asctime)s - %(levelname)s - %(message)s',
+    #     handlers=[
+    #         logging.FileHandler(log_filename),
+    #         logging.StreamHandler()
+    #     ]
+    # )
+    # sys.stdout = PrintLogger()
+    # sys.stderr = PrintLogger()
+
 
     if args.device == "cuda" and not torch.cuda.is_available():
         print("\ncuda is not avaiable.\n")

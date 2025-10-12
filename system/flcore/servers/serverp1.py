@@ -3,6 +3,8 @@ import numpy as np
 import os
 import torch
 import copy
+import logging
+import sys
 from flcore.clients.clientp1 import Clientp1
 from flcore.servers.serverbase import Server
 from threading import Thread
@@ -28,6 +30,8 @@ class Fedp1(Server):
 
 
     def train(self):
+        # 配置 logging
+        
 
         for i in range(self.global_rounds+1):
             s_t = time.time()
@@ -122,8 +126,11 @@ class Fedp1(Server):
         else:
             print("acc is not None")  # 调试信息
             acc.append(test_acc)
-        # added
-
+        # 各个客户端的准确率和AUC
+        for idx, (acc, auc, n) in enumerate(zip(stats[2], stats[3], stats[1])):
+            print(f"Client{idx} test acc: {acc/n:.4f} test auc: {auc/n:.4f}")
+        
+        # 平均
         print("Averaged Train Loss: {:.4f}".format(train_loss))
         print("Averaged Test Accuracy: {:.4f}".format(test_acc))
         print("Averaged Test AUC: {:.4f}".format(test_auc))
@@ -146,7 +153,10 @@ class Fedp1(Server):
         train_loss = sum(stats_train[2])*1.0 / sum(stats_train[1])
         accs = [a / n for a, n in zip(stats[2], stats[1])]
         aucs = [a / n for a, n in zip(stats[3], stats[1])]
-
+        # 各个客户端的准确率和AUC
+        for idx, (acc, auc, n) in enumerate(zip(stats[2], stats[3], stats[1])):
+            print(f"Client{idx} test acc: {acc/n:.4f} test auc: {auc/n:.4f}")
+        # 平均
         print("Averaged Train Loss: {:.4f}".format(train_loss))
         print("Averaged Test Accuracy: {:.4f}".format(test_acc))
         print("Averaged Test AUC: {:.4f}".format(test_auc))
