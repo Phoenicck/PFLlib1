@@ -63,8 +63,8 @@ def generate_dataset(dir_path, num_clients, niid, balance, partition):
     #     idx = dataset_label == i
     #     dataset.append(dataset_image[idx])
 
-    X, y, statistic = separate_data1((dataset_image, dataset_label), num_clients, num_classes,  
-                                    niid, balance, partition)
+    #changed
+    X, y, statistic = separate_data1((dataset_image, dataset_label), num_clients, num_classes, niid, balance, partition)
     train_data, test_data = split_data(X, y)
     save_file(config_path, train_path, test_path, train_data, test_data, num_clients, num_classes, 
         statistic, niid, balance, partition)

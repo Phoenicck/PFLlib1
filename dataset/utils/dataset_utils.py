@@ -9,7 +9,7 @@ from PIL import Image
 
 batch_size = 10
 train_ratio = 0.75 # merge original training set and test set, then split it manually. 
-alpha = 0.1 # for Dirichlet distribution. 100 for exdir
+alpha = 0.5 # for Dirichlet distribution. 100 for exdir
 
 def check(config_path, train_path, test_path, num_clients, niid=False, 
         balance=True, partition=None):
@@ -288,86 +288,100 @@ class ImageDataset(Dataset):
         return image, img_label
     
 
-def separate_data1(data, num_clients, num_classes, niid=False, balance=False, partition=None, class_per_client=None):
+# added
+def separate_data1(data, num_clients, num_classes, niid=True, balance=False, partition='dir', class_per_client=None, random_seed=42):
+    np.random.seed(random_seed)  # 设置随机种子以确保可重复性
     X = [[] for _ in range(num_clients)]
     y = [[] for _ in range(num_clients)]
     statistic = [[] for _ in range(num_clients)]
 
     dataset_content, dataset_label = data
-    # guarantee that each client must have at least one batch of data for testing. 
-    least_samples = int(min(batch_size / (1-train_ratio), len(dataset_label) / num_clients / 2))
+    # 保证每个客户端至少有一个 batch 的测试数据
+    least_samples = int(min(batch_size / (1 - train_ratio), len(dataset_label) / num_clients / 2))
 
     dataidx_map = {}
 
-    if not niid:
-        partition = 'pat'
-        class_per_client = num_classes
+    # 假设 num_classes=10，前 6 类（0-5）为已知类，后 4 类（6-9）为未知类
+    known_classes = list(range(6))  # 已知类：0-5
+    unknown_classes = list(range(6, num_classes))  # 未知类：6-9
 
-    if partition == 'pat':
-        idxs = np.array(range(len(dataset_label)))
-        idx_for_each_class = []
-        for i in range(num_classes):
-            idx_for_each_class.append(idxs[dataset_label == i])
-
-        # 修改部分：为每个客户端随机分配5、6或7个类别
-        if class_per_client is None:
-            # 随机生成每个客户端的类别数量（3,4,5）
-            class_num_per_client = np.random.choice([5, 4,3], num_clients).tolist()
-        else:
-            class_num_per_client = [class_per_client for _ in range(num_clients)]
-        
-        # 检查类别分配是否合理
-        total_classes_assigned = sum(class_num_per_client)
-        if total_classes_assigned < num_classes:
-            raise ValueError(f"分配的类别总数({total_classes_assigned})少于数据集中存在的类别数({num_classes})")
-        
-        # 为每个类别选择要分配的客户端
-        client_class_assignments = [[] for _ in range(num_classes)]
-        
-        # 为每个客户端随机选择类别
-        for client in range(num_clients):
-            num_classes_for_client = class_num_per_client[client]
-            # 随机选择该客户端拥有的类别
-            selected_classes = np.random.choice(num_classes, num_classes_for_client, replace=False)
-            for class_id in selected_classes:
-                client_class_assignments[class_id].append(client)
-        
-        # 分配数据
-        for i in range(num_classes):
-            selected_clients = client_class_assignments[i]
-            if len(selected_clients) == 0:
-                continue
-                
-            num_all_samples = len(idx_for_each_class[i])
-            num_selected_clients = len(selected_clients)
-            num_per = num_all_samples / num_selected_clients
-            
-            if balance:
-                num_samples = [int(num_per) for _ in range(num_selected_clients-1)]
-            else:
-                num_samples = np.random.randint(max(num_per/10, least_samples/num_classes), num_per, num_selected_clients-1).tolist()
-            num_samples.append(num_all_samples-sum(num_samples))
-
-            idx = 0
-            for client, num_sample in zip(selected_clients, num_samples):
-                if client not in dataidx_map.keys():
-                    dataidx_map[client] = idx_for_each_class[i][idx:idx+num_sample]
-                else:
-                    dataidx_map[client] = np.append(dataidx_map[client], idx_for_each_class[i][idx:idx+num_sample], axis=0)
-                idx += num_sample
+    # 为每个客户端随机分配 3-6 个已知类
+    class_num_per_client = np.random.choice([3, 4, 5, 6], num_clients).tolist()
     
-    else:
-        raise NotImplementedError
+    # 检查已知类的分配是否覆盖所有已知类
+    total_known_classes_assigned = sum(class_num_per_client)
+    if total_known_classes_assigned < len(known_classes):
+        raise ValueError(f"分配的已知类别总数({total_known_classes_assigned})少于已知类别数({len(known_classes)})")
 
-    # assign data
+    # 为每个已知类选择要分配的客户端
+    client_class_assignments = [[] for _ in range(num_classes)]
     for client in range(num_clients):
-        idxs = dataidx_map[client]
+        num_classes_for_client = class_num_per_client[client]
+        selected_known_classes = np.random.choice(known_classes, num_classes_for_client, replace=False)
+        for class_id in selected_known_classes:
+            client_class_assignments[class_id].append(client)
+
+    # 为已知类分配数据（Dirichlet 分布，允许重复分配）
+    client_known_samples = [0] * num_clients
+    max_samples_per_client = len(dataset_label) // num_clients * 2  # 限制最大样本量
+    min_samples_per_client = least_samples  # 最小样本量
+    for i in known_classes:
+        selected_clients = client_class_assignments[i]
+        if len(selected_clients) == 0:
+            continue
+
+        idx_k = np.where(dataset_label == i)[0]
+        num_all_samples = len(idx_k)
+
+        # 使用 Dirichlet 分布决定每个客户端的样本比例
+        proportions = np.random.dirichlet(np.repeat(alpha, num_clients))
+        proportions = proportions / proportions.sum()
+        target_samples = [int(p * num_all_samples) for p in proportions]
+        target_samples = [min(max(t, min_samples_per_client // len(known_classes)), max_samples_per_client // len(known_classes)) for t in target_samples]
+
+        for client in selected_clients:
+            num_samples = target_samples[client]
+            if num_samples > 0:
+                # 允许重复采样
+                idx = np.random.choice(idx_k, size=num_samples, replace=True)
+                if client not in dataidx_map:
+                    dataidx_map[client] = idx
+                else:
+                    dataidx_map[client] = np.append(dataidx_map[client], idx, axis=0)
+                client_known_samples[client] += num_samples
+
+    # 为未知类分配数据（每个客户端的未知类样本量为已知类的 20%）
+    for i in unknown_classes:
+        idx_k = np.where(dataset_label == i)[0]
+        num_all_samples = len(idx_k)
+
+        # 计算目标样本量（已知类的 20%）
+        target_samples = [int(client_known_samples[client] * 0.2) for client in range(num_clients)]
+        target_samples = [min(max(t, 1), max_samples_per_client // len(unknown_classes)) for t in target_samples]
+
+        # 使用 Dirichlet 分布调整分配比例
+        proportions = np.random.dirichlet(np.repeat(alpha, num_clients))
+        proportions = proportions / proportions.sum()
+        adjusted_samples = [int(t * p) for t, p in zip(target_samples, proportions)]
+        adjusted_samples = [max(t, 1 if t > 0 else 0) for t in adjusted_samples]
+
+        for client, num_samples in enumerate(adjusted_samples):
+            if num_samples > 0:
+                # 允许重复采样
+                idx = np.random.choice(idx_k, size=num_samples, replace=True)
+                if client not in dataidx_map:
+                    dataidx_map[client] = idx
+                else:
+                    dataidx_map[client] = np.append(dataidx_map[client], idx, axis=0)
+
+    # 分配数据
+    for client in range(num_clients):
+        idxs = dataidx_map.get(client, np.array([]))
         X[client] = dataset_content[idxs]
         y[client] = dataset_label[idxs]
 
         for i in np.unique(y[client]):
-            statistic[client].append((int(i), int(sum(y[client]==i))))
-            
+            statistic[client].append((int(i), int(sum(y[client] == i))))
 
     del data
     # gc.collect()
