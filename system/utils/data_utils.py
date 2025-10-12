@@ -37,9 +37,15 @@ def read_client_data(dataset, idx, is_train=True, few_shot=0):
         data_list = data_list_new
     return data_list
 
+# 1012 对于cifar10数据集，将标签>=6的都设为6
 def process_image(data):
     X = torch.Tensor(data['x']).type(torch.float32)
     y = torch.Tensor(data['y']).type(torch.int64)
+    # print("y before process:", y)
+    
+    # 对于labely将其标签>=6的都设为6
+    y[y>=6] = 6 
+    # print("y after process:", y)
     return [(x, y) for x, y in zip(X, y)]
 
 

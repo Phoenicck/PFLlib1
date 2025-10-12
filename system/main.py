@@ -90,7 +90,7 @@ def run(args):
             args.model = BaseHeadSplit(args.model, args.head)
             server = FedAvg(args, i)
             
-        if args.algorithm == "Fedp1":
+        elif args.algorithm == "Fedp1":
             args.head = copy.deepcopy(args.model.fc)
             args.model.fc = nn.Identity()
             args.model = BaseHeadSplit(args.model, args.head)
@@ -99,7 +99,10 @@ def run(args):
         else:
             raise NotImplementedError
 
-        server.train()
+        if args.goal == "test":
+            server.test()
+        elif args.goal == "train":
+            server.train()
 
         time_list.append(time.time()-start)
 

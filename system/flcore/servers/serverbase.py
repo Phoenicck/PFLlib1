@@ -159,6 +159,7 @@ class Server(object):
     def load_model(self):
         model_path = os.path.join("models", self.dataset)
         model_path = os.path.join(model_path, self.algorithm + "_server" + ".pt")
+        print(f"Load model from {model_path}")
         assert (os.path.exists(model_path))
         self.global_model = torch.load(model_path)
 

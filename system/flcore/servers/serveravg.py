@@ -1,4 +1,7 @@
 import time
+import numpy as np
+import os
+import torch
 from flcore.clients.clientavg import clientAVG
 from flcore.servers.serverbase import Server
 from threading import Thread
@@ -17,6 +20,8 @@ class FedAvg(Server):
 
         # self.load_model()
         self.Budget = []
+        # add
+        self.best_acc = 0
 
 
     def train(self):
@@ -28,7 +33,7 @@ class FedAvg(Server):
             if i%self.eval_gap == 0:
                 print(f"\n-------------Round number: {i}-------------")
                 print("\nEvaluate global model")
-                self.evaluate()
+                self.evaluate(epoch=i)
 
             for client in self.selected_clients:
                 client.train()
@@ -65,3 +70,74 @@ class FedAvg(Server):
             print(f"\n-------------Fine tuning round-------------")
             print("\nEvaluate new clients")
             self.evaluate()
+
+    # 1012 added
+    def evaluate(self, acc=None, loss=None,epoch=None):
+        
+        # 多了个epoch参数，用于保存当前最好的模型
+        stats = self.test_metrics()
+        stats_train = self.train_metrics()
+        test_acc = sum(stats[2])*1.0 / sum(stats[1])
+        test_auc = sum(stats[3])*1.0 / sum(stats[1])
+        train_loss = sum(stats_train[2])*1.0 / sum(stats_train[1])
+        accs = [a / n for a, n in zip(stats[2], stats[1])]
+        aucs = [a / n for a, n in zip(stats[3], stats[1])]
+        # 检查是否传入了acc和loss参数
+        #print(acc, loss)
+        if loss == None:
+            self.rs_train_loss.append(train_loss)
+        else:
+            print("loss is not None")  # 调试信息
+            loss.append(train_loss)
+
+        if acc == None:
+            self.rs_test_acc.append(test_acc)
+        else:
+            print("acc is not None")  # 调试信息
+            acc.append(test_acc)
+        
+        
+        # added
+
+        print("Averaged Train Loss: {:.4f}".format(train_loss))
+        print("Averaged Test Accuracy: {:.4f}".format(test_acc))
+        print("Averaged Test AUC: {:.4f}".format(test_auc))
+        # self.print_(test_acc, train_acc, train_loss)
+        print("Std Test Accuracy: {:.4f}".format(np.std(accs)))
+        print("Std Test AUC: {:.4f}".format(np.std(aucs)))
+        if epoch is not None:
+            if test_acc > self.best_acc:
+                self.best_acc = test_acc
+                self.save_global_model(epoch)
+                # 输出当前最好的准确率
+                print("Current Best Test Accuracy: {:.4f}".format(self.best_acc))
+    
+    def save_global_model(self, epoch=None):
+        # 多了个epoch参数，用于保存当前最好的模型
+        model_path = os.path.join("models", self.dataset)
+        if not os.path.exists(model_path):
+            os.makedirs(model_path)
+        if epoch is None:
+            model_file = self.algorithm + "_server.pt"
+        else:
+            model_file = f"{self.algorithm}_server_best_epoch{epoch}.pt"
+        model_path = os.path.join(model_path, model_file)
+        torch.save(self.global_model, model_path)
+    
+    def test(self):
+        # 增加测试功能
+        print("\nTest Evaluate global model")
+        self.load_model()
+        s_t = time.time()
+        self.selected_clients = self.select_clients()
+        self.send_models()
+        self.evaluate()
+        print('-'*25, 'time cost', '-'*25, time.time() - s_t)
+    
+    def load_model(self):
+        # 个性化加载模型
+        model_path = os.path.join("models", self.dataset)
+        model_path = os.path.join(model_path, self.algorithm + "_server" + ".pt")
+        print(f"Load model from {model_path}")
+        assert (os.path.exists(model_path))
+        self.global_model = torch.load(model_path)
