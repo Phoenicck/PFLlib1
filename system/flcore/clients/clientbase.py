@@ -178,6 +178,7 @@ class Client(object):
     # @staticmethod
     # def model_exists():
     #     return os.path.exists(os.path.join("models", "server" + ".pt"))
+    
     #changed in p1
     def load_train_data(self, batch_size=None):
         if batch_size == None:

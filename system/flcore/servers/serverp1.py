@@ -232,6 +232,7 @@ class Fedp1(Server):
         self.p1_global_soft_labels = torch.mean(all_soft_labels_cat, dim=0)
         print("Computed global soft labels.")
         print(self.p1_global_soft_labels)
+        
     # 分发全局软标签
     def distribute_global_soft_labels(self):
         """

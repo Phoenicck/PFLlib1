@@ -15,7 +15,7 @@ def read_data(dataset, idx, is_train=True):
         data = np.load(f, allow_pickle=True)['data'].tolist()
     return data
 
-
+# 1013修改为p1，只要y标签>=6的都跳过
 def read_client_data(dataset, idx, is_train=True, few_shot=0):
     data = read_data(dataset, idx, is_train)
     if "News" in dataset:
@@ -24,8 +24,11 @@ def read_client_data(dataset, idx, is_train=True, few_shot=0):
         data_list = process_Shakespeare(data)
     else:
         data_list = process_image(data)
-        
-    # data_list里的元素的type
+    
+    # 过滤掉y>=6的样本
+    if(is_train):
+        data_list = [item for item in data_list if item[1].item() < 6]
+
     if is_train and few_shot > 0:
         shot_cnt_dict = defaultdict(int)
         data_list_new = []
@@ -36,6 +39,26 @@ def read_client_data(dataset, idx, is_train=True, few_shot=0):
                 shot_cnt_dict[label] += 1
         data_list = data_list_new
     return data_list
+# def read_client_data(dataset, idx, is_train=True, few_shot=0):
+#     data = read_data(dataset, idx, is_train)
+#     if "News" in dataset:
+#         data_list = process_text(data)
+#     elif "Shakespeare" in dataset:
+#         data_list = process_Shakespeare(data)
+#     else:
+#         data_list = process_image(data)
+        
+#     # data_list里的元素的type
+#     if is_train and few_shot > 0:
+#         shot_cnt_dict = defaultdict(int)
+#         data_list_new = []
+#         for data_item in data_list:
+#             label = data_item[1].item()
+#             if shot_cnt_dict[label] < few_shot:
+#                 data_list_new.append(data_item)
+#                 shot_cnt_dict[label] += 1
+#         data_list = data_list_new
+#     return data_list
 
 # 1012 对于cifar10数据集，将标签>=6的都设为6
 def process_image(data):

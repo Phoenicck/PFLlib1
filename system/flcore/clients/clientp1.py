@@ -34,10 +34,12 @@ class Clientp1(Client):
                     else:
                         x = x.to(self.device)
                     y = y.to(self.device)
+                    #print(y)
                     if self.train_slow:
                         time.sleep(0.1 * np.abs(np.random.rand()))
                     output = self.model(x)
-
+                    print("output before softmax:", output)
+                    print("y:", y)
                     loss = self.loss(output, y)
                     self.optimizer.zero_grad()
                     loss.backward()
@@ -87,7 +89,7 @@ class Clientp1(Client):
                 soft_labels.append(probs.cpu())
         # 拼接所有 batch 的 soft label
         self.p1_local_soft_labels = torch.cat(soft_labels, dim=0)
-        #print(f"Client {self.id} computed local soft labels.")
-        #print(self.p1_local_soft_labels)
+        print(f"Client {self.id} computed local soft labels.")
+        print(torch.mean(self.p1_local_soft_labels, dim=0))
         self.model.train()
 
