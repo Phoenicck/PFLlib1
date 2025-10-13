@@ -3,6 +3,8 @@ import torch
 import numpy as np
 import time
 from flcore.clients.clientbase import Client
+from sklearn.preprocessing import label_binarize
+from sklearn import metrics
 
 
 class Clientp1(Client):
@@ -10,6 +12,10 @@ class Clientp1(Client):
         super().__init__(args, id, train_samples, test_samples, **kwargs)
         # p1
         self.p1_local_soft_labels = None  # 本地软标签
+        #本地各个类别的数量
+        self.p1_local_nums_per_class = None
+        self.caculate_local_nums_per_class()
+        print(f"Client {self.id} local nums per class: {self.p1_local_nums_per_class}")
         #print("\nClient p1 initialized.")
 
     def train(self,warmup=False):
@@ -38,8 +44,8 @@ class Clientp1(Client):
                     if self.train_slow:
                         time.sleep(0.1 * np.abs(np.random.rand()))
                     output = self.model(x)
-                    print("output before softmax:", output)
-                    print("y:", y)
+                    # print("output before softmax:", output)
+                    # print("y:", y)
                     loss = self.loss(output, y)
                     self.optimizer.zero_grad()
                     loss.backward()
@@ -70,26 +76,142 @@ class Clientp1(Client):
         self.train_time_cost['num_rounds'] += 1
         self.train_time_cost['total_cost'] += time.time() - start_time
     
-    # 计算本地软标签
+
     def compute_local_soft_labels(self):
         """
-        计算本地软标签：对本地训练集所有样本，记录模型输出的 softmax 概率
+        计算每个类别的本地软标签：对本地训练集每个类别，统计其 softmax 概率的均值
         """
         self.model.eval()
         trainloader = self.load_train_data()
-        soft_labels = []
+        class_soft_labels = {}
+        class_counts = {}
+
         with torch.no_grad():
-            for x, _ in trainloader:
+            for x, y in trainloader:
                 if type(x) == type([]):
                     x[0] = x[0].to(self.device)
                 else:
                     x = x.to(self.device)
+                y = y.to(self.device)
                 outputs = self.model(x)
-                probs = torch.softmax(outputs, dim=1)
-                soft_labels.append(probs.cpu())
-        # 拼接所有 batch 的 soft label
-        self.p1_local_soft_labels = torch.cat(soft_labels, dim=0)
-        print(f"Client {self.id} computed local soft labels.")
-        print(torch.mean(self.p1_local_soft_labels, dim=0))
+                probs = torch.softmax(outputs, dim=1)  # [batch, num_classes]
+                for prob, label in zip(probs, y):
+                    label = label.item()
+                    if label not in class_soft_labels:
+                        class_soft_labels[label] = prob.clone()
+                        class_counts[label] = 1
+                    else:
+                        class_soft_labels[label] += prob
+                        class_counts[label] += 1
+
+        # 对每个类别求平均
+        for label in class_soft_labels:
+            class_soft_labels[label] /= class_counts[label]
+
+        self.p1_local_soft_labels_per_class = class_soft_labels  # {label: mean_soft_label}
+        #print(f"Client {self.id} computed local soft labels per class.")
+        # for label, soft in class_soft_labels.items():
+        #     print(f"Class {label}: {soft}")
         self.model.train()
 
+    def caculate_local_nums_per_class(self):
+        """
+        计算本地每个类别的样本数量
+        """
+        trainloader = self.load_train_data()
+        class_counts = {}
+
+        for _, y in trainloader:
+            for label in y:
+                label = label.item()
+                if label not in class_counts:
+                    class_counts[label] = 1
+                else:
+                    class_counts[label] += 1
+        self.p1_local_nums_per_class = class_counts 
+
+    # p1
+    # 根据argmax选择与对应类的软标签，计算其kl散度，太高的就是未知类 就是假已知类
+    # 这样的逻辑是没有问题的，不用担心误判；原本就已经是未知类了
+    # 只要不是未知类，就不会误判
+    def test_metrics(self,warmup=False):
+            
+            testloaderfull = self.load_test_data()
+            
+            self.model.eval()
+
+            test_acc = 0
+            test_num = 0
+            y_prob = []
+            y_true = []
+            
+            with torch.no_grad():
+                for x, y in testloaderfull:
+                    if type(x) == type([]):
+                        x[0] = x[0].to(self.device)
+                    else:
+                        x = x.to(self.device)
+                    # print("x type:", type(x), "x shape:", x.shape)
+                    # print("y type:", type(y), "y shape:", y.shape)
+                    y = y.to(self.device)
+                    output = self.model(x)
+
+                    if warmup:
+                       test_acc += (torch.sum(torch.argmax(output, dim=1) == y)).item()
+                    else:
+                        print("Client p1 test metrics with unknown detection.")
+                         # 需要插入计算kl散度的代码
+                        kl_divs = self.compute_kl_divergence(output)
+                        # print("kl_divs:", kl_divs)
+                        # 设置一个阈值，假设是0.5，超过这个值的样本被认为是未知类
+                        threshold = 0.5
+                        # 将超过阈值的样本的预测类别设为一个新的类别，比如num_classes
+                        preds = torch.argmax(output, dim=1)
+                        preds[kl_divs > threshold] = 6  # 假设未知
+
+                        test_acc += (torch.sum(preds == y)).item()
+                    test_num += y.shape[0]
+    
+                    y_prob.append(output.detach().cpu().numpy())
+                    nc = self.num_classes
+                    if self.num_classes == 2:
+                        nc += 1
+                    lb = label_binarize(y.detach().cpu().numpy(), classes=np.arange(nc))
+                    if self.num_classes == 2:
+                        lb = lb[:, :2]
+                    y_true.append(lb)
+
+            # self.model.cpu()
+            # self.save_model(self.model, 'model')
+
+            y_prob = np.concatenate(y_prob, axis=0)
+            y_true = np.concatenate(y_true, axis=0)
+
+            auc = metrics.roc_auc_score(y_true, y_prob, average='micro')
+            
+            return test_acc, test_num, auc
+    
+    # 根据y的argmax去计算kl散度
+    def compute_kl_divergence(self, outputs):
+        """
+        计算输出与对应类的软标签之间的 KL 散度
+        outputs: 模型的原始输出 logits，形状为 [batch_size, num_classes]
+        返回：每个样本的 KL 散度，形状为 [batch_size]
+        """
+        probs = torch.softmax(outputs, dim=1)  # 转换为概率分布
+        kl_divs = []
+
+        for prob in probs:
+            label = torch.argmax(prob).item()
+            
+            if (self.p1_local_soft_labels_per_class is not None and 
+                label in self.p1_local_soft_labels_per_class):
+                soft_label = self.p1_local_soft_labels_per_class[label].to(self.device)
+                kl_div = torch.sum(soft_label * (torch.log(soft_label + 1e-10) - torch.log(prob + 1e-10)))
+                kl_divs.append(kl_div.item())
+            else:
+                # 如果该类别没有软标签，设定一个较高的 KL 散度值，表示不确定
+                kl_divs.append(float('inf'))
+        print("Predicted label:", label, "Soft label:", soft_label, "Prob:", prob, "KL Divergence:", kl_div)
+
+        return torch.tensor(kl_divs)

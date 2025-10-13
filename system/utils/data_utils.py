@@ -67,7 +67,7 @@ def process_image(data):
     # print("y before process:", y)
     
     # 对于labely将其标签>=6的都设为6
-    y[y>=6] = 6 
+    # y[y>=6] = 6 
     # print("y after process:", y)
     return [(x, y) for x, y in zip(X, y)]
 

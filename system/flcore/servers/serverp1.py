@@ -59,7 +59,7 @@ class Fedp1(Server):
                     # 计算全局软标签
                     self.compute_global_soft_labels()
                     # 分发全局软标签
-                    # self.distribute_global_soft_labels()
+                    self.distribute_global_soft_labels()
                     print(f"\n-------------Warmup Finished. Aggregate global model.-------------") 
                 # 计算时间 
                 self.Budget.append(time.time() - s_t)
@@ -69,6 +69,7 @@ class Fedp1(Server):
             else:
                 self.send_models() 
                 self.distribute_global_soft_labels()
+                
                 if i%self.eval_gap == 0:
                     print(f"\n-------------Round number: {i}-------------")
                     print("\nEvaluate global model")
@@ -155,7 +156,7 @@ class Fedp1(Server):
 
     #预热阶段的测试代码
     def evaluate1(self):
-        stats = self.test_metrics()
+        stats = self.test_metrics(warmup=self.p1_warmup)
         stats_train = self.train_metrics()
         test_acc = sum(stats[2])*1.0 / sum(stats[1])
         test_auc = sum(stats[3])*1.0 / sum(stats[1])
@@ -212,36 +213,51 @@ class Fedp1(Server):
     # 计算全局软标签
     def compute_global_soft_labels(self):
         """
-        计算全局软标签：对所有客户端的本地软标签取平均
+        计算全局软标签：对所有客户端的每类本地软标签按样本数加权平均
         """
-        print("\nCompute global soft labels.")
-        all_soft_labels = []
+        #print("\nCompute global soft labels (per class, weighted).")
+        class_soft_labels_sum = {}
+        class_counts = {}
+
         for client in self.selected_clients:
             client.compute_local_soft_labels()
-            if client.p1_local_soft_labels is None:
-                print(f"Client {client.id} has no local soft labels. Skipping.")
+            if (not hasattr(client, "p1_local_soft_labels_per_class") or 
+                client.p1_local_soft_labels_per_class is None or 
+                not hasattr(client, "p1_local_nums_per_class") or 
+                client.p1_local_nums_per_class is None):
+                print(f"Client {client.id} has no local soft labels per class or class counts. Skipping.")
                 continue
-            all_soft_labels.append(client.p1_local_soft_labels)
-        
-        if len(all_soft_labels) == 0:
+            for label, soft in client.p1_local_soft_labels_per_class.items():
+                count = client.p1_local_nums_per_class.get(label, 0)
+                if count == 0:
+                    continue
+                if label not in class_soft_labels_sum:
+                    class_soft_labels_sum[label] = soft * count
+                    class_counts[label] = count
+                else:
+                    class_soft_labels_sum[label] += soft * count
+                    class_counts[label] += count
+
+        if len(class_soft_labels_sum) == 0:
             print("No local soft labels collected from clients.")
             return
-        
-        # 拼接所有客户端的 soft label
-        all_soft_labels_cat = torch.cat(all_soft_labels, dim=0)
-        self.p1_global_soft_labels = torch.mean(all_soft_labels_cat, dim=0)
-        print("Computed global soft labels.")
-        print(self.p1_global_soft_labels)
-        
-    # 分发全局软标签
+
+        # 对每个类别按样本数加权平均
+        self.p1_global_soft_labels_per_class = {}
+        for label in class_soft_labels_sum:
+            self.p1_global_soft_labels_per_class[label] = class_soft_labels_sum[label] / class_counts[label]
+
+        #print("Computed global soft labels per class (weighted).")
+        # for label, soft in self.p1_global_soft_labels_per_class.items():
+        #     print(f"Class {label}: {soft}")
+
     def distribute_global_soft_labels(self):
         """
-        分发全局软标签：将全局软标签发送给所有客户端
+        分发全局软标签到所有客户端
         """
-        print("\nDistribute global soft labels to clients.")
-        if self.p1_global_soft_labels is None:
-            print("Global soft labels have not been computed yet.")
+        if not hasattr(self, "p1_global_soft_labels_per_class") or self.p1_global_soft_labels_per_class is None:
+            print("No global soft labels to distribute.")
             return
         for client in self.selected_clients:
-            client.p1_global_soft_labels = copy.deepcopy(self.p1_global_soft_labels)
-        print("Distributed global soft labels to clients.")
+            client.p1_global_soft_labels_per_class = copy.deepcopy(self.p1_global_soft_labels_per_class)
+        #print("Distributed global soft labels to clients.")

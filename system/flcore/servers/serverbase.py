@@ -192,7 +192,7 @@ class Server(object):
     def load_item(self, item_name):
         return torch.load(os.path.join(self.save_folder_name, "server_" + item_name + ".pt"))
 
-    def test_metrics(self):
+    def test_metrics(self,warmup=False):
         if self.eval_new_clients and self.num_new_clients > 0:
             self.fine_tuning_new_clients()
             return self.test_metrics_new_clients()
@@ -201,7 +201,7 @@ class Server(object):
         tot_correct = []
         tot_auc = []
         for c in self.clients:
-            ct, ns, auc = c.test_metrics()
+            ct, ns, auc = c.test_metrics(warmup)
             tot_correct.append(ct*1.0)
             tot_auc.append(auc*ns)
             num_samples.append(ns)
