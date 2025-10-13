@@ -27,7 +27,7 @@ class Fedp1(Server):
         self.p1_best_acc = 0
         self.p1_warmup=False # 是否预热
         self.p1_global_soft_labels = None  # 全局软标签
-        self.p1_warmup_rounds =10 # 预热轮数，可调
+        self.p1_warmup_rounds =1 # 预热轮数，可调
 
 
     def train(self):
@@ -74,6 +74,8 @@ class Fedp1(Server):
                     print(f"\n-------------Round number: {i}-------------")
                     print("\nEvaluate global model")
                     self.evaluate(epoch=i)
+                    print('-'*50)
+                    self.evaluate1()
                 # threads = [Thread(target=client.train)
                 #            for client in self.selected_clients]
                 # [t.start() for t in threads]
@@ -156,7 +158,7 @@ class Fedp1(Server):
 
     #预热阶段的测试代码
     def evaluate1(self):
-        stats = self.test_metrics(warmup=self.p1_warmup)
+        stats = self.test_metrics(warmup=True)
         stats_train = self.train_metrics()
         test_acc = sum(stats[2])*1.0 / sum(stats[1])
         test_auc = sum(stats[3])*1.0 / sum(stats[1])
