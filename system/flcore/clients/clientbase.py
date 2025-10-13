@@ -52,11 +52,11 @@ class Client(object):
         self.learning_rate_decay = args.learning_rate_decay
 
 
-    def load_train_data(self, batch_size=None):
-        if batch_size == None:
-            batch_size = self.batch_size
-        train_data = read_client_data(self.dataset, self.id, is_train=True, few_shot=self.few_shot)
-        return DataLoader(train_data, batch_size, drop_last=True, shuffle=True)
+    # def load_train_data(self, batch_size=None):
+    #     if batch_size == None:
+    #         batch_size = self.batch_size
+    #     train_data = read_client_data(self.dataset, self.id, is_train=True, few_shot=self.few_shot)
+    #     return DataLoader(train_data, batch_size, drop_last=True, shuffle=True)
 
     def load_test_data(self, batch_size=None):
         if batch_size == None:
@@ -101,7 +101,7 @@ class Client(object):
 
                 test_acc += (torch.sum(torch.argmax(output, dim=1) == y)).item()
                 test_num += y.shape[0]
-
+ 
                 y_prob.append(output.detach().cpu().numpy())
                 nc = self.num_classes
                 if self.num_classes == 2:
@@ -178,3 +178,10 @@ class Client(object):
     # @staticmethod
     # def model_exists():
     #     return os.path.exists(os.path.join("models", "server" + ".pt"))
+    #changed in p1
+    def load_train_data(self, batch_size=None):
+        if batch_size == None:
+            batch_size = self.batch_size
+        train_data = read_client_data(self.dataset, self.id, is_train=True, few_shot=self.few_shot)
+        return DataLoader(train_data, batch_size, drop_last=True, shuffle=True)
+

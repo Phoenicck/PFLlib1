@@ -25,8 +25,9 @@ class Fedp1(Server):
         self.Budget = []
         # p1
         self.p1_best_acc = 0
+        self.p1_warmup=False # 是否预热
         self.p1_global_soft_labels = None  # 全局软标签
-        self.p1_warmup_rounds =10  # 预热轮数，可调
+        self.p1_warmup_rounds =1 # 预热轮数，可调
 
 
     def train(self):
@@ -39,19 +40,24 @@ class Fedp1(Server):
             #预热客户端
             if i < self.p1_warmup_rounds:
                 print(f"\n-------------Warmup Round number: {i}-------------")
+                self.p1_warmup=True # 预热阶段
+
                 for client in self.selected_clients:
                     #print(f"\n-------------Warmup Round number: {i} Client {client.id}-------------")
-                    client.train()
+                    client.train(self.p1_warmup) # 预热阶段训练
+                
                 # 预热阶段仅用客户端自己的数据进行测试（看能不能开始加软标签）
                 self.evaluate1()
                 # 预热结束后，聚合模型
                 if i == self.p1_warmup_rounds - 1:
+                    self.p1_warmup=False # 结束预热阶段
+
                     self.receive_models()
                     if self.dlg_eval and i%self.dlg_gap == 0:
                         self.call_dlg(i)
                     self.aggregate_parameters() # 暂时按照FedAvg聚合
                     # 计算全局软标签
-                    # self.compute_global_soft_labels()
+                    self.compute_global_soft_labels()
                     # 分发全局软标签
                     # self.distribute_global_soft_labels()
                     print(f"\n-------------Warmup Finished. Aggregate global model.-------------") 
@@ -61,7 +67,8 @@ class Fedp1(Server):
             
             # 预热结束 继续训练   
             else:
-                self.send_models()
+                self.send_models() 
+                self.distribute_global_soft_labels()
                 if i%self.eval_gap == 0:
                     print(f"\n-------------Round number: {i}-------------")
                     print("\nEvaluate global model")
@@ -77,6 +84,8 @@ class Fedp1(Server):
                 if self.dlg_eval and i%self.dlg_gap == 0:
                     self.call_dlg(i)
                 self.aggregate_parameters()
+                # 计算全局软标签
+                self.compute_global_soft_labels()
 
                 self.Budget.append(time.time() - s_t)
                 print('-'*25, 'time cost', '-'*25, self.Budget[-1])
@@ -199,3 +208,39 @@ class Fedp1(Server):
         print(f"Load model from {model_path}")
         assert (os.path.exists(model_path))
         self.global_model = torch.load(model_path)
+
+    # 计算全局软标签
+    def compute_global_soft_labels(self):
+        """
+        计算全局软标签：对所有客户端的本地软标签取平均
+        """
+        print("\nCompute global soft labels.")
+        all_soft_labels = []
+        for client in self.selected_clients:
+            client.compute_local_soft_labels()
+            if client.p1_local_soft_labels is None:
+                print(f"Client {client.id} has no local soft labels. Skipping.")
+                continue
+            all_soft_labels.append(client.p1_local_soft_labels)
+        
+        if len(all_soft_labels) == 0:
+            print("No local soft labels collected from clients.")
+            return
+        
+        # 拼接所有客户端的 soft label
+        all_soft_labels_cat = torch.cat(all_soft_labels, dim=0)
+        self.p1_global_soft_labels = torch.mean(all_soft_labels_cat, dim=0)
+        print("Computed global soft labels.")
+        print(self.p1_global_soft_labels)
+    # 分发全局软标签
+    def distribute_global_soft_labels(self):
+        """
+        分发全局软标签：将全局软标签发送给所有客户端
+        """
+        print("\nDistribute global soft labels to clients.")
+        if self.p1_global_soft_labels is None:
+            print("Global soft labels have not been computed yet.")
+            return
+        for client in self.selected_clients:
+            client.p1_global_soft_labels = copy.deepcopy(self.p1_global_soft_labels)
+        print("Distributed global soft labels to clients.")

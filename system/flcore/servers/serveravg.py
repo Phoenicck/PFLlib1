@@ -98,7 +98,8 @@ class FedAvg(Server):
         
         
         # added
-
+        for idx, (acc, auc, n) in enumerate(zip(stats[2], stats[3], stats[1])):
+            print(f"Client{idx} test acc: {acc/n:.4f} test auc: {auc/n:.4f}")
         print("Averaged Train Loss: {:.4f}".format(train_loss))
         print("Averaged Test Accuracy: {:.4f}".format(test_acc))
         print("Averaged Test AUC: {:.4f}".format(test_auc))
@@ -147,4 +148,3 @@ class FedAvg(Server):
         print(f"Load model from {model_path}")
         assert (os.path.exists(model_path))
         self.global_model = torch.load(model_path)
-        
