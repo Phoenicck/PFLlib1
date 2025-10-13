@@ -27,7 +27,7 @@ class Fedp1(Server):
         self.p1_best_acc = 0
         self.p1_warmup=False # 是否预热
         self.p1_global_soft_labels = None  # 全局软标签
-        self.p1_warmup_rounds =1 # 预热轮数，可调
+        self.p1_warmup_rounds =10 # 预热轮数，可调
 
 
     def train(self):
@@ -69,7 +69,7 @@ class Fedp1(Server):
             else:
                 self.send_models() 
                 self.distribute_global_soft_labels()
-                
+
                 if i%self.eval_gap == 0:
                     print(f"\n-------------Round number: {i}-------------")
                     print("\nEvaluate global model")
