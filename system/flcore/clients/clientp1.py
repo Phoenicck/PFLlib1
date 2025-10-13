@@ -164,7 +164,7 @@ class Clientp1(Client):
                         kl_divs = self.compute_kl_divergence(output,y)
                         # print("kl_divs:", kl_divs)
                         # 设置一个阈值，假设是0.5，超过这个值的样本被认为是未知类
-                        threshold = 0.3
+                        threshold = 0.5
                         # 将超过阈值的样本的预测类别设为一个新的类别，比如num_classes
                         preds = torch.argmax(output, dim=1)
                         preds[kl_divs > threshold] = 6  # 假设未知
@@ -192,7 +192,7 @@ class Clientp1(Client):
             return test_acc, test_num, auc
     
     # 根据y的argmax去计算kl散度
-    def compute_kl_divergence(self, outputs,y):
+    def compute_kl_divergence(self, outputs, y):
         """
         计算输出与对应类的软标签之间的 KL 散度
         outputs: 模型的原始输出 logits，形状为 [batch_size, num_classes] 
@@ -201,7 +201,7 @@ class Clientp1(Client):
         probs = torch.softmax(outputs, dim=1)  # 转换为概率分布
         kl_divs = []
 
-        for prob in probs:
+        for prob ,yy in zip(probs,y):
             label = torch.argmax(prob).item()
             
             if (self.p1_local_soft_labels_per_class is not None and 
@@ -212,6 +212,9 @@ class Clientp1(Client):
             else:
                 # 如果该类别没有软标签，设定一个较高的 KL 散度值，表示不确定
                 kl_divs.append(float('inf'))
-        print("Predicted label:", label, "true y", y, "KL Divergence:", kl_div)
+            #print("Predicted label:", label, "true y", yy, "KL Divergence:", kl_div)
+        
 
         return torch.tensor(kl_divs)
+
+# 测试kl散度的阈值
