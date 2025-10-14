@@ -204,7 +204,7 @@ class Server(object):
             #FEDAVG
             #ct, ns, auc = c.test_metrics()
             #FEDP1
-            ct, ns, auc = c.test_metrics(warmup)
+            ct, ns, auc = c.test_metrics()
             tot_correct.append(ct*1.0)
             tot_auc.append(auc*ns)
             num_samples.append(ns)

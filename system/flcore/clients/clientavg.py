@@ -142,20 +142,21 @@ class clientAVG(Client):
         print(f"Unknown total: {unk_total}, Unknown correct: {unk_correct}, UNK: {unk_acc:.2f}%")
         print(f"HOS: {hos:.2f}%")
         # 计算AUC（仅已知类）
-        try:
-            all_labels_np = np.array(all_labels)
-            all_probs_np = np.array(all_probs)
-            known_indices = np.where((all_labels_np >= 0) & (all_labels_np < self.num_classes))[0]
-            known_labels = all_labels_np[known_indices]
-            known_probs = all_probs_np[known_indices]
-            if len(np.unique(known_labels)) > 1:
-                auc = metrics.roc_auc_score(
-                    label_binarize(known_labels, classes=list(range(self.num_classes))),
-                    known_probs,
-                    average='macro', multi_class='ovr'
-                )
-            else:
-                auc = float('nan')
-        except Exception as e:
-            print(f"Error in AUC calculation: {e}")
-            auc = float('nan')
+        # try:
+        #     all_labels_np = np.array(all_labels)
+        #     all_probs_np = np.array(all_probs)
+        #     known_indices = np.where((all_labels_np >= 0) & (all_labels_np < self.num_classes))[0]
+        #     known_labels = all_labels_np[known_indices]
+        #     known_probs = all_probs_np[known_indices]
+        #     if len(np.unique(known_labels)) > 1:
+        #         auc = metrics.roc_auc_score(
+        #             label_binarize(known_labels, classes=list(range(self.num_classes))),
+        #             known_probs,
+        #             average='macro', multi_class='ovr'
+        #         )
+        #     else:
+        #         auc = float('nan')
+        # except Exception as e:
+        #     print(f"Error in AUC calculation: {e}")
+        #     auc = float('nan')
+        #return known_correct, known_total, unk_correct, unk_total, os_star, unk_acc, hos
