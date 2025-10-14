@@ -78,7 +78,10 @@ class Client(object):
             param.data = new_param.data.clone()
 
     def test_metrics(self):
-        self.unknown_test()
+        # fedavg
+
+        unknown_test_status=self.unknown_test()
+        #####
         testloaderfull = self.load_test_data()
         # self.model = self.load_model('model')
         # self.model.to(self.device)
@@ -120,7 +123,7 @@ class Client(object):
 
         auc = metrics.roc_auc_score(y_true, y_prob, average='micro')
         
-        return test_acc, test_num, auc
+        return test_acc, test_num, auc, unknown_test_status
 
     def train_metrics(self):
         trainloader = self.load_train_data()
