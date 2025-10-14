@@ -180,6 +180,7 @@ class Clientp1(Client):
                     if self.num_classes == 2:
                         lb = lb[:, :2]
                     y_true.append(lb)
+                    
 
             # self.model.cpu()
             # self.save_model(self.model, 'model')
@@ -188,9 +189,12 @@ class Clientp1(Client):
             y_true = np.concatenate(y_true, axis=0)
 
             auc = metrics.roc_auc_score(y_true, y_prob, average='micro')
-            
-            return test_acc, test_num, auc
-    
+            if warmup:
+                return test_acc, test_num, auc
+            else:
+                unknown_test_status=self.unknown_test()
+                return test_acc, test_num, auc, unknown_test_status
+
     # 根据y的argmax去计算kl散度
     def compute_kl_divergence(self, outputs, y):
         """
@@ -217,10 +221,11 @@ class Clientp1(Client):
 
         return torch.tensor(kl_divs)
 
+
     def unknown_test(self):
         testloader = self.load_test_data()
         self.model.eval()
-        test_loss = 0.0
+        
         known_correct = 0
         known_total = 0
         unk_correct = 0
@@ -228,7 +233,7 @@ class Clientp1(Client):
         all_labels = []
         all_probs = []
 
-        prob_threshold = 0.5  # 未知类检测阈值，可调
+        kl_threshold = 0.5  # KL散度判未知的阈值
 
         with torch.no_grad():
             for i, (x, y) in enumerate(testloader):
@@ -238,22 +243,22 @@ class Clientp1(Client):
                     x = x.to(self.device)
                 y = y.to(self.device)
                 outputs = self.model(x)
-                loss = self.loss(outputs, y)
-                test_loss += loss.item() * y.size(0)
+
+                # 计算KL散度
+                kl_divs = self.compute_kl_divergence(outputs, y)
+                preds = torch.argmax(outputs, dim=1)
+                preds[kl_divs > kl_threshold] = 6  # KL大于阈值的直接判为未知
 
                 # 区分已知类和未知类
                 known_mask = (y >= 0) & (y < 6)
-                unknown_mask = (y == 6)  # 假设未知类标签为-1
+                unknown_mask = (y == 6)
 
                 # 已知类预测
-                _, predicted = torch.max(outputs.data, 1)
-                known_correct += ((predicted == y) & known_mask).sum().item()
+                known_correct += ((preds == y) & known_mask).sum().item()
                 known_total += known_mask.sum().item()
 
                 # 未知类检测
-                max_prob= torch.argmax(torch.softmax(outputs, dim=1), dim=1)
-                
-                unk_correct += (unknown_pred & unknown_mask).sum().item()
+                unk_correct += ((preds == 6) & unknown_mask).sum().item()
                 unk_total += unknown_mask.sum().item()
 
                 all_labels.extend(y.cpu().numpy())
@@ -263,28 +268,6 @@ class Clientp1(Client):
         os_star = 100.0 * known_correct / known_total if known_total > 0 else 0.0
         unk_acc = 100.0 * unk_correct / unk_total if unk_total > 0 else 0.0
         hos = 2 * (os_star * unk_acc) / (os_star + unk_acc + 1e-8) if (os_star + unk_acc) > 0 else 0.0
-        test_loss = test_loss / (known_total + unk_total)
-        #print(f"Known total: {known_total}, Known correct: {known_correct}, OS*: {os_star:.2f}%")
-        #print(f"Unknown total: {unk_total}, Unknown correct: {unk_correct}, UNK: {unk_acc:.2f}%")
-        #print(f"HOS: {hos:.2f}%")
-        # 计算AUC（仅已知类）
-        # try:
-        #     all_labels_np = np.array(all_labels)
-        #     all_probs_np = np.array(all_probs)
-        #     known_indices = np.where((all_labels_np >= 0) & (all_labels_np < self.num_classes))[0]
-        #     known_labels = all_labels_np[known_indices]
-        #     known_probs = all_probs_np[known_indices]
-        #     if len(np.unique(known_labels)) > 1:
-        #         auc = metrics.roc_auc_score(
-        #             label_binarize(known_labels, classes=list(range(self.num_classes))),
-        #             known_probs,
-        #             average='macro', multi_class='ovr'
-        #         )
-        #     else:
-        #         auc = float('nan')
-        # except Exception as e:
-        #     print(f"Error in AUC calculation: {e}")
-        #     auc = float('nan')
-        return known_correct, known_total, unk_correct, unk_total, os_star, unk_acc, hos
 
-    # 测试kl散度的阈值
+        return known_correct, known_total, unk_correct, unk_total, os_star, unk_acc, hos
+    

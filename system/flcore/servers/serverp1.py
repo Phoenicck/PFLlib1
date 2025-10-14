@@ -155,6 +155,27 @@ class Fedp1(Server):
                 self.save_global_model(epoch)
                 # 输出当前最好的准确率
                 print("Current Best Test Accuracy: {:.4f}".format(self.p1_best_acc))
+        
+        ####未知类osda评估
+        print("-"*25,"Unknown class OSDA evaluation:","-"*25)
+        unknown_test_statuses=stats[4]
+        for idx, status in enumerate(unknown_test_statuses):
+            # 依次打印os* unk hos
+            known_correct, known_total, unk_correct, unk_total, os_star, unk_acc, hos = status
+            print(f"Client{idx} unknown test status: os*: {os_star:.4f}, unk acc: {unk_acc:.4f}, hos: {hos:.4f}")
+        # 记录平均os* unk hos
+        avg_os_star = 0
+        avg_unk_acc = 0
+        avg_hos = 0
+        for status in unknown_test_statuses:
+            known_correct, known_total, unk_correct, unk_total, os_star, unk_acc, hos = status
+            avg_os_star += os_star
+            avg_unk_acc += unk_acc
+            avg_hos += hos
+        avg_os_star /= len(unknown_test_statuses)
+        avg_unk_acc /= len(unknown_test_statuses)
+        avg_hos /= len(unknown_test_statuses)
+        print(f"Average unknown test status: os*: {avg_os_star:.4f}, unk acc: {avg_unk_acc:.4f}, hos: {avg_hos:.4f}")
 
     #预热阶段的测试代码
     def evaluate1(self):
