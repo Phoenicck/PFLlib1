@@ -101,6 +101,7 @@ def run(args):
             raise NotImplementedError
 
         if args.goal == "test":
+            #server.unkonwn_test()
             server.test(args.epoch)
         elif args.goal == "train":
             server.train()

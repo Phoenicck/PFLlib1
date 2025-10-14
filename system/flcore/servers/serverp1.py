@@ -195,7 +195,10 @@ class Fedp1(Server):
         s_t = time.time()
         self.selected_clients = self.select_clients()
         self.send_models()
+        # train
         self.evaluate()
+        # test
+        #self.evaluate1()
         print('-'*25, 'time cost', '-'*25, time.time() - s_t)
     
     def load_model(self,epoch=None):

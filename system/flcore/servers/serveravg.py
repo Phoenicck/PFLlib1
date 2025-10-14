@@ -132,6 +132,7 @@ class FedAvg(Server):
         s_t = time.time()
         self.selected_clients = self.select_clients()
         self.send_models()
+        
         self.evaluate()
         print('-'*25, 'time cost', '-'*25, time.time() - s_t)
     
@@ -148,3 +149,6 @@ class FedAvg(Server):
         print(f"Load model from {model_path}")
         assert (os.path.exists(model_path))
         self.global_model = torch.load(model_path)
+
+    
+    

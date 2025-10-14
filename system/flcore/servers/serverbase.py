@@ -201,6 +201,9 @@ class Server(object):
         tot_correct = []
         tot_auc = []
         for c in self.clients:
+            #FEDAVG
+            #ct, ns, auc = c.test_metrics()
+            #FEDP1
             ct, ns, auc = c.test_metrics(warmup)
             tot_correct.append(ct*1.0)
             tot_auc.append(auc*ns)

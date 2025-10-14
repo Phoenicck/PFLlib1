@@ -164,7 +164,7 @@ class Clientp1(Client):
                         kl_divs = self.compute_kl_divergence(output,y)
                         # print("kl_divs:", kl_divs)
                         # 设置一个阈值，假设是0.5，超过这个值的样本被认为是未知类
-                        threshold = 0.5
+                        threshold = 0.3
                         # 将超过阈值的样本的预测类别设为一个新的类别，比如num_classes
                         preds = torch.argmax(output, dim=1)
                         preds[kl_divs > threshold] = 6  # 假设未知
