@@ -164,7 +164,7 @@ class Clientp1(Client):
                         kl_divs = self.compute_kl_divergence(output,y)
                         # print("kl_divs:", kl_divs)
                         # 设置一个阈值，假设是0.5，超过这个值的样本被认为是未知类
-                        threshold = 0.3
+                        threshold = 0.4
                         # 将超过阈值的样本的预测类别设为一个新的类别，比如num_classes
                         preds = torch.argmax(output, dim=1)
                         preds[kl_divs > threshold] = 6  # 假设未知
@@ -176,7 +176,14 @@ class Clientp1(Client):
                     nc = self.num_classes
                     if self.num_classes == 2:
                         nc += 1
+                    # print("测试auc的计算")
+                    # print("self.num_classes:", nc)
+                    # print("y:", y)
+
                     lb = label_binarize(y.detach().cpu().numpy(), classes=np.arange(nc))
+                    # print("lb:", lb)
+                    # print("output:", output)
+                    #lb = label_binarize(y.detach().cpu().numpy(), classes=np.arange(nc))
                     if self.num_classes == 2:
                         lb = lb[:, :2]
                     y_true.append(lb)
@@ -233,7 +240,7 @@ class Clientp1(Client):
         all_labels = []
         all_probs = []
 
-        kl_threshold = 0.5  # KL散度判未知的阈值
+        kl_threshold = 0.4 # KL散度判未知的阈值
 
         with torch.no_grad():
             for i, (x, y) in enumerate(testloader):

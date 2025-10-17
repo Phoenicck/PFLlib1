@@ -110,7 +110,13 @@ class Client(object):
                 nc = self.num_classes
                 if self.num_classes == 2:
                     nc += 1
+                # print("测试auc的计算")
+                # print("self.num_classes:", nc)
+                # print("y:", y)
+
                 lb = label_binarize(y.detach().cpu().numpy(), classes=np.arange(nc))
+                # print("lb:", lb)
+                # print("output:", output)
                 if self.num_classes == 2:
                     lb = lb[:, :2]
                 y_true.append(lb)
