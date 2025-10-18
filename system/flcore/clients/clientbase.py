@@ -228,7 +228,7 @@ class Client(object):
                 known_correct += ((predicted == y) & known_mask).sum().item()
                 known_total += known_mask.sum().item()
 
-                # 未知类检测
+                # 未知类检测 
                 max_probs, _ = torch.max(torch.softmax(outputs, dim=1), dim=1)
                 unknown_pred = max_probs < prob_threshold
                 unk_correct += (unknown_pred & unknown_mask).sum().item()
@@ -242,26 +242,33 @@ class Client(object):
         unk_acc = 100.0 * unk_correct / unk_total if unk_total > 0 else 0.0
         hos = 2 * (os_star * unk_acc) / (os_star + unk_acc + 1e-8) if (os_star + unk_acc) > 0 else 0.0
         
-        #print(f"Known total: {known_total}, Known correct: {known_correct}, OS*: {os_star:.2f}%")
-        #print(f"Unknown total: {unk_total}, Unknown correct: {unk_correct}, UNK: {unk_acc:.2f}%")
-        #print(f"HOS: {hos:.2f}%")
-        # 计算AUC（仅已知类）
-        # try:
-        #     all_labels_np = np.array(all_labels)
-        #     all_probs_np = np.array(all_probs)
-        #     known_indices = np.where((all_labels_np >= 0) & (all_labels_np < self.num_classes))[0]
-        #     known_labels = all_labels_np[known_indices]
-        #     known_probs = all_probs_np[known_indices]
-        #     if len(np.unique(known_labels)) > 1:
-        #         auc = metrics.roc_auc_score(
-        #             label_binarize(known_labels, classes=list(range(self.num_classes))),
-        #             known_probs,
-        #             average='macro', multi_class='ovr'
-        #         )
-        #     else:
-        #         auc = float('nan')
-        # except Exception as e:
-        #     print(f"Error in AUC calculation: {e}")
-        #     auc = float('nan')
+        # for auc calculation
+        from sklearn.metrics import roc_auc_score, average_precision_score
+
+        # 将 all_labels 转为 numpy
+        all_labels = np.array(all_labels)
+        all_probs = np.array(all_probs)
+
+        # Step 1: 二分类标签：未知=1, 已知=0
+        is_unknown = (all_labels == 6).astype(int)
+
+        # Step 2: 构造未知得分
+        # 方法A: 直接取第7类概率
+        p_unknown = all_probs[:, 6]
+
+        # 方法B: 用 1 - max(已知类置信度)
+        p_max_known = np.max(all_probs[:, :6], axis=1)
+        score_1_minus_max = 1.0 - p_max_known
+
+        # Step 3: 计算 AUROC / AUPR
+        auroc_a = roc_auc_score(is_unknown, p_unknown)
+        aupr_a = average_precision_score(is_unknown, p_unknown)
+
+        auroc_b = roc_auc_score(is_unknown, score_1_minus_max)
+        aupr_b = average_precision_score(is_unknown, score_1_minus_max)
+        print("Client {} unknown test AUC results:".format(self.id))
+        print(f"[p_unknown] AUROC={auroc_a:.4f}, AUPR={aupr_a:.4f}")
+        print(f"[1-max_known] AUROC={auroc_b:.4f}, AUPR={aupr_b:.4f}")
+        
         return known_correct, known_total, unk_correct, unk_total, os_star, unk_acc, hos
     
