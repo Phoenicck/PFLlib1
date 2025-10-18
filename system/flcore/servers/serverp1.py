@@ -73,9 +73,11 @@ class Fedp1(Server):
                 if i%self.eval_gap == 0:
                     print(f"\n-------------Round number: {i}-------------")
                     print("\nEvaluate global model")
-                    self.evaluate(epoch=i)
-                    print('-'*50)
+                    print('-'*25, 'original Test', '-'*25)
                     self.evaluate1()
+                    print('-'*25, 'Fedp1 Test', '-'*25)
+                    self.evaluate(epoch=i)
+                    
                 # threads = [Thread(target=client.train)
                 #            for client in self.selected_clients]
                 # [t.start() for t in threads]
@@ -105,6 +107,8 @@ class Fedp1(Server):
 
         self.save_results()
         self.save_global_model()
+        self.save_global_soft_labels()
+        
 
         if self.num_new_clients > 0:
             self.eval_new_clients = True
@@ -153,6 +157,7 @@ class Fedp1(Server):
             if test_acc > self.p1_best_acc:
                 self.p1_best_acc = test_acc
                 self.save_global_model(epoch)
+                self.save_global_soft_labels(epoch)
                 # 输出当前最好的准确率
                 print("Current Best Test Accuracy: {:.4f}".format(self.p1_best_acc))
         
@@ -220,9 +225,11 @@ class Fedp1(Server):
         # 增加测试功能
         print("\nTest Evaluate global model")
         self.load_model(epoch)
+        self.load_global_soft_labels(epoch)
         s_t = time.time()
         self.selected_clients = self.select_clients()
         self.send_models()
+        self.distribute_global_soft_labels()
         # train
         self.evaluate()
         # test
@@ -254,13 +261,13 @@ class Fedp1(Server):
 
         for client in self.selected_clients:
             client.compute_local_soft_labels()
-            if (not hasattr(client, "p1_local_soft_labels_per_class") or 
-                client.p1_local_soft_labels_per_class is None or 
+            if (not hasattr(client, "p1_local_soft_labels") or 
+                client.p1_local_soft_labels is None or 
                 not hasattr(client, "p1_local_nums_per_class") or 
                 client.p1_local_nums_per_class is None):
                 print(f"Client {client.id} has no local soft labels per class or class counts. Skipping.")
                 continue
-            for label, soft in client.p1_local_soft_labels_per_class.items():
+            for label, soft in client.p1_local_soft_labels.items():
                 count = client.p1_local_nums_per_class.get(label, 0)
                 if count == 0:
                     continue
@@ -292,5 +299,34 @@ class Fedp1(Server):
             print("No global soft labels to distribute.")
             return
         for client in self.selected_clients:
-            client.p1_global_soft_labels_per_class = copy.deepcopy(self.p1_global_soft_labels_per_class)
+            client.p1_local_soft_labels = copy.deepcopy(self.p1_global_soft_labels_per_class)
         #print("Distributed global soft labels to clients.")
+
+
+    # 保存当前全局软标签
+    def save_global_soft_labels(self, epoch=None):
+        file_path = os.path.join("softlabels", self.dataset)
+        if not os.path.exists(file_path):
+            os.makedirs(file_path)
+        if epoch is None:
+            softlable_file = self.algorithm + "_server.pt"
+        else:
+            softlable_file = f"{self.algorithm}_server_best_epoch{epoch}.pt"        
+        file_path = os.path.join(file_path, softlable_file)
+        torch.save(self.p1_global_soft_labels_per_class, file_path)
+        print(f"Saved global soft labels to {file_path}.")
+
+    # 加载全局软标签
+    def load_global_soft_labels(self, epoch=None):
+        if epoch is None:
+            file_path = os.path.join("softlabels", self.dataset)
+            file_path = os.path.join(file_path, self.algorithm + "_server" + ".pt")
+        else:
+            file_path = os.path.join("softlabels", self.dataset)
+            file_name = f"{self.algorithm}_server_best_epoch{epoch}.pt"
+            file_path = os.path.join(file_path, file_name)
+
+        print(f"Load model from {file_path}")
+        assert (os.path.exists(file_path))
+        self.p1_global_soft_labels_per_class = torch.load(file_path)
+        

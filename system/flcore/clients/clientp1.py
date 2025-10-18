@@ -5,7 +5,7 @@ import time
 from flcore.clients.clientbase import Client
 from sklearn.preprocessing import label_binarize
 from sklearn import metrics
-
+from sklearn.metrics import roc_auc_score, average_precision_score
 
 class Clientp1(Client):
     def __init__(self, args, id, train_samples, test_samples, **kwargs):
@@ -108,7 +108,7 @@ class Clientp1(Client):
         for label in class_soft_labels:
             class_soft_labels[label] /= class_counts[label]
 
-        self.p1_local_soft_labels_per_class = class_soft_labels  # {label: mean_soft_label}
+        self.p1_local_soft_labels = class_soft_labels  # {label: mean_soft_label}
         #print(f"Client {self.id} computed local soft labels per class.")
         # for label, soft in class_soft_labels.items():
         #     print(f"Class {label}: {soft}")
@@ -215,9 +215,9 @@ class Clientp1(Client):
         for prob ,yy in zip(probs,y):
             label = torch.argmax(prob).item()
             
-            if (self.p1_local_soft_labels_per_class is not None and 
-                label in self.p1_local_soft_labels_per_class):
-                soft_label = self.p1_local_soft_labels_per_class[label].to(self.device)
+            if (self.p1_local_soft_labels is not None and 
+                label in self.p1_local_soft_labels):
+                soft_label = self.p1_local_soft_labels[label].to(self.device)
                 kl_div = torch.sum(soft_label * (torch.log(soft_label + 1e-10) - torch.log(prob + 1e-10)))
                 kl_divs.append(kl_div.item())
             else:
@@ -239,6 +239,7 @@ class Clientp1(Client):
         unk_total = 0
         all_labels = []
         all_probs = []
+        all_kl = []
 
         kl_threshold = 0.4 # KL散度判未知的阈值
 
@@ -270,11 +271,30 @@ class Clientp1(Client):
 
                 all_labels.extend(y.cpu().numpy())
                 all_probs.extend(torch.softmax(outputs, dim=1).cpu().numpy())
+                all_kl.extend(kl_divs.cpu().numpy())
 
         # 计算OS*和UNK
         os_star = 100.0 * known_correct / known_total if known_total > 0 else 0.0
         unk_acc = 100.0 * unk_correct / unk_total if unk_total > 0 else 0.0
         hos = 2 * (os_star * unk_acc) / (os_star + unk_acc + 1e-8) if (os_star + unk_acc) > 0 else 0.0
+
+        # ---- AUROC & AUPR 计算 ----
+        all_labels = np.array(all_labels)
+        all_kl = np.array(all_kl)
+
+        # 未知类为1，已知类为0
+        is_unknown = (all_labels == 6).astype(int)
+
+        # KL越大越可能未知
+        try:
+            auroc_kl = roc_auc_score(is_unknown, all_kl)
+            aupr_kl = average_precision_score(is_unknown, all_kl)
+        except ValueError:
+            print('Only one class present in y_true. AUROC and AUPR are undefined.')
+            auroc_kl, aupr_kl = np.nan, np.nan
+        print("-------------------------------------------")
+        print(f"[KL-divergence] AUROC: {auroc_kl:.4f}, AUPR: {aupr_kl:.4f}")
+        print("===========================================\n")
 
         return known_correct, known_total, unk_correct, unk_total, os_star, unk_acc, hos
     
