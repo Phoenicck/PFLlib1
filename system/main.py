@@ -247,6 +247,7 @@ if __name__ == "__main__":
     # add
     parser.add_argument('-epoch', "--epoch", type=int, default=None,
                         help="The epoch of the model to be loaded for testing")
+    parser.add_argument('-kl', "--kl_threshold", type=float, default=0.5)
 
     args = parser.parse_args()
 

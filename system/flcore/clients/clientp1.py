@@ -14,6 +14,7 @@ class Clientp1(Client):
         self.p1_local_soft_labels = None  # 本地软标签
         #本地各个类别的数量
         self.p1_local_nums_per_class = None
+        self.kl_threshold=args.kl_threshold  # KL散度判未知的阈值
         self.caculate_local_nums_per_class()
         print(f"Client {self.id} local nums per class: {self.p1_local_nums_per_class}")
         #print("\nClient p1 initialized.")
@@ -164,10 +165,10 @@ class Clientp1(Client):
                         kl_divs = self.compute_kl_divergence(output,y)
                         # print("kl_divs:", kl_divs)
                         # 设置一个阈值，假设是0.5，超过这个值的样本被认为是未知类
-                        threshold = 0.4
+                        # threshold = 0.4
                         # 将超过阈值的样本的预测类别设为一个新的类别，比如num_classes
                         preds = torch.argmax(output, dim=1)
-                        preds[kl_divs > threshold] = 6  # 假设未知
+                        preds[kl_divs > self.kl_threshold] = 6  # 假设未知
 
                         test_acc += (torch.sum(preds == y)).item()
                     test_num += y.shape[0]
@@ -241,7 +242,7 @@ class Clientp1(Client):
         all_probs = []
         all_kl = []
 
-        kl_threshold = 0.4 # KL散度判未知的阈值
+        # kl_threshold = 0.4 # KL散度判未知的阈值
 
         with torch.no_grad():
             for i, (x, y) in enumerate(testloader):
@@ -255,7 +256,7 @@ class Clientp1(Client):
                 # 计算KL散度
                 kl_divs = self.compute_kl_divergence(outputs, y)
                 preds = torch.argmax(outputs, dim=1)
-                preds[kl_divs > kl_threshold] = 6  # KL大于阈值的直接判为未知
+                preds[kl_divs > self.kl_threshold] = 6  # KL大于阈值的直接判为未知
 
                 # 区分已知类和未知类
                 known_mask = (y >= 0) & (y < 6)

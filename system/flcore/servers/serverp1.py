@@ -26,7 +26,7 @@ class Fedp1(Server):
         # p1
         self.p1_best_acc = 0
         self.p1_warmup=False # 是否预热
-        self.p1_global_soft_labels = None  # 全局软标签
+        self.p1_global_soft_labels_per_class = {}  # 全局软标签
         self.p1_warmup_rounds =1 # 预热轮数，可调
 
 
@@ -230,6 +230,7 @@ class Fedp1(Server):
         self.selected_clients = self.select_clients()
         self.send_models()
         self.distribute_global_soft_labels()
+        
         # train
         self.evaluate()
         # test
@@ -283,7 +284,7 @@ class Fedp1(Server):
             return
 
         # 对每个类别按样本数加权平均
-        self.p1_global_soft_labels_per_class = {}
+        #self.p1_global_soft_labels_per_class = {}
         for label in class_soft_labels_sum:
             self.p1_global_soft_labels_per_class[label] = class_soft_labels_sum[label] / class_counts[label]
 
@@ -329,4 +330,6 @@ class Fedp1(Server):
         print(f"Load model from {file_path}")
         assert (os.path.exists(file_path))
         self.p1_global_soft_labels_per_class = torch.load(file_path)
+        print("Loaded global soft labels:")
+        print(self.p1_global_soft_labels_per_class)
         
