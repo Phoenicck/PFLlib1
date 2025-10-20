@@ -7,3 +7,4 @@ system/flcore/servers/__pycache__/*
 *.pyc
 *.pt
 *.h5
+system/kl_analyze/

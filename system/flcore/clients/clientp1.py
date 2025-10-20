@@ -2,6 +2,7 @@ import copy
 import torch
 import numpy as np
 import time
+import pandas as pd
 from flcore.clients.clientbase import Client
 from sklearn.preprocessing import label_binarize
 from sklearn import metrics
@@ -307,7 +308,77 @@ class Clientp1(Client):
         return torch.tensor(kl_divs)
 
 
+    # def unknown_test(self):
+    #     testloader = self.load_test_data()
+    #     self.model.eval()
+        
+    #     known_correct = 0
+    #     known_total = 0
+    #     unk_correct = 0
+    #     unk_total = 0
+    #     all_labels = []
+    #     all_probs = []
+    #     all_kl = []
+
+    #     # kl_threshold = 0.4 # KL散度判未知的阈值
+
+    #     with torch.no_grad():
+    #         for i, (x, y) in enumerate(testloader):
+    #             if type(x) == type([]):
+    #                 x[0] = x[0].to(self.device)
+    #             else:
+    #                 x = x.to(self.device)
+    #             y = y.to(self.device)
+    #             outputs = self.model(x)
+
+    #             # 计算KL散度
+    #             kl_divs = self.compute_kl_divergence(outputs, y)
+    #             preds = torch.argmax(outputs, dim=1)
+    #             preds[kl_divs > self.kl_threshold] = 6  # KL大于阈值的直接判为未知
+
+    #             # 区分已知类和未知类
+    #             known_mask = (y >= 0) & (y < 6)
+    #             unknown_mask = (y == 6)
+
+    #             # 已知类预测
+    #             known_correct += ((preds == y) & known_mask).sum().item()
+    #             known_total += known_mask.sum().item()
+
+    #             # 未知类检测
+    #             unk_correct += ((preds == 6) & unknown_mask).sum().item()
+    #             unk_total += unknown_mask.sum().item()
+
+    #             all_labels.extend(y.cpu().numpy())
+    #             all_probs.extend(torch.softmax(outputs, dim=1).cpu().numpy())
+    #             all_kl.extend(kl_divs.cpu().numpy())
+
+    #     # 计算OS*和UNK
+    #     os_star = 100.0 * known_correct / known_total if known_total > 0 else 0.0
+    #     unk_acc = 100.0 * unk_correct / unk_total if unk_total > 0 else 0.0
+    #     hos = 2 * (os_star * unk_acc) / (os_star + unk_acc + 1e-8) if (os_star + unk_acc) > 0 else 0.0
+
+    #     # ---- AUROC & AUPR 计算 ----
+    #     all_labels = np.array(all_labels)
+    #     all_kl = np.array(all_kl)
+
+    #     # 未知类为1，已知类为0
+    #     is_unknown = (all_labels == 6).astype(int)
+
+    #     # KL越大越可能未知
+    #     try:
+    #         auroc_kl = roc_auc_score(is_unknown, all_kl)
+    #         aupr_kl = average_precision_score(is_unknown, all_kl)
+    #     except ValueError:
+    #         print('Only one class present in y_true. AUROC and AUPR are undefined.')
+    #         auroc_kl, aupr_kl = np.nan, np.nan
+    #     print("-------------------------------------------")
+    #     print(f"[KL-divergence] AUROC: {auroc_kl:.4f}, AUPR: {aupr_kl:.4f}")
+    #     print("===========================================\n")
+
+    #     return known_correct, known_total, unk_correct, unk_total, os_star, unk_acc, hos
+
     def unknown_test(self):
+        save_csv_path="./kl_analyze/"+f"client_{self.id}_test_results.csv"
         testloader = self.load_test_data()
         self.model.eval()
         
@@ -319,12 +390,10 @@ class Clientp1(Client):
         all_probs = []
         all_kl = []
 
-        # kl_threshold = 0.4 # KL散度判未知的阈值
-
         with torch.no_grad():
             for i, (x, y) in enumerate(testloader):
-                if type(x) == type([]):
-                    x[0] = x[0].to(self.device)
+                if isinstance(x, list):
+                    x = x[0].to(self.device)
                 else:
                     x = x.to(self.device)
                 y = y.to(self.device)
@@ -347,23 +416,33 @@ class Clientp1(Client):
                 unk_correct += ((preds == 6) & unknown_mask).sum().item()
                 unk_total += unknown_mask.sum().item()
 
+                # 收集信息
                 all_labels.extend(y.cpu().numpy())
                 all_probs.extend(torch.softmax(outputs, dim=1).cpu().numpy())
                 all_kl.extend(kl_divs.cpu().numpy())
 
-        # 计算OS*和UNK
+        # ---------- CSV 保存 ----------
+        all_labels = np.array(all_labels)
+        all_probs = np.array(all_probs)
+        all_kl = np.array(all_kl)
+
+        # 将预测的软标签拆开每一列
+        num_classes = all_probs.shape[1]
+        prob_cols = [f"prob_class_{i}" for i in range(num_classes)]
+
+        df = pd.DataFrame(all_probs, columns=prob_cols)
+        df["true_label"] = all_labels
+        df["kl_divergence"] = all_kl
+        df.to_csv(save_csv_path, index=False)
+        print(f"[INFO] Saved all test results to {save_csv_path}")
+
+        # ---------- OS*, UNK, HOS 指标 ----------
         os_star = 100.0 * known_correct / known_total if known_total > 0 else 0.0
         unk_acc = 100.0 * unk_correct / unk_total if unk_total > 0 else 0.0
         hos = 2 * (os_star * unk_acc) / (os_star + unk_acc + 1e-8) if (os_star + unk_acc) > 0 else 0.0
 
         # ---- AUROC & AUPR 计算 ----
-        all_labels = np.array(all_labels)
-        all_kl = np.array(all_kl)
-
-        # 未知类为1，已知类为0
         is_unknown = (all_labels == 6).astype(int)
-
-        # KL越大越可能未知
         try:
             auroc_kl = roc_auc_score(is_unknown, all_kl)
             aupr_kl = average_precision_score(is_unknown, all_kl)
@@ -372,6 +451,7 @@ class Clientp1(Client):
             auroc_kl, aupr_kl = np.nan, np.nan
         print("-------------------------------------------")
         print(f"[KL-divergence] AUROC: {auroc_kl:.4f}, AUPR: {aupr_kl:.4f}")
+        print(f"OS*: {os_star:.2f}, UNK: {unk_acc:.2f}, HOS: {hos:.2f}")
         print("===========================================\n")
 
         return known_correct, known_total, unk_correct, unk_total, os_star, unk_acc, hos
