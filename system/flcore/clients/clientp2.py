@@ -1,5 +1,7 @@
 import copy
 import torch
+import torch.nn as nn
+import torch.nn.functional as F
 import numpy as np
 import time
 import pandas as pd
@@ -10,19 +12,154 @@ from sklearn.metrics import roc_auc_score, average_precision_score
 from sklearn.mixture import BayesianGaussianMixture
 import matplotlib.pyplot as plt
 
-class Clientp1(Client):
+# class Clientp2(Client):
+#     def __init__(self, args, id, train_samples, test_samples, **kwargs):
+#         super().__init__(args, id, train_samples, test_samples, **kwargs)
+#         # p1
+#         self.p1_local_soft_labels = None  # 本地软标签
+#         #本地各个类别的数量
+#         self.p1_local_nums_per_class = None
+#         self.kl_threshold=args.kl_threshold  # KL散度判未知的阈值
+#         self.caculate_local_nums_per_class()
+#         print(f"P2Client {self.id} local nums per class: {self.p1_local_nums_per_class}")
+        #print("\nClient p1 initialized.")
+
+    # def train(self,warmup=False):
+    #     trainloader = self.load_train_data()
+    #     # self.model.to(self.device)
+    #     self.model.train()
+        
+    #     start_time = time.time()
+
+    #     max_local_epochs = self.local_epochs
+    #     if self.train_slow:
+    #         max_local_epochs = np.random.randint(1, max_local_epochs // 2)
+
+
+    #     #预热阶段的训练
+    #     if warmup:
+    #         # print("warmup\n")
+    #         for epoch in range(max_local_epochs):
+    #             for i, (x, y) in enumerate(trainloader):
+    #                 if type(x) == type([]):
+    #                     x[0] = x[0].to(self.device)
+    #                 else:
+    #                     x = x.to(self.device)
+    #                 y = y.to(self.device)
+    #                 #print(y)
+    #                 if self.train_slow:
+    #                     time.sleep(0.1 * np.abs(np.random.rand()))
+    #                 output = self.model(x)
+    #                 # print("output before softmax:", output)
+    #                 # print("y:", y)
+    #                 loss = self.loss(output, y)
+    #                 self.optimizer.zero_grad()
+    #                 loss.backward()
+    #                 self.optimizer.step()
+    #     else:
+    #         # print("normal train\n")
+    #         for epoch in range(max_local_epochs):
+    #             for i, (x, y) in enumerate(trainloader):
+    #                 if type(x) == type([]):
+    #                     x[0] = x[0].to(self.device)
+    #                 else:
+    #                     x = x.to(self.device)
+    #                 y = y.to(self.device)
+    #                 if self.train_slow:
+    #                     time.sleep(0.1 * np.abs(np.random.rand()))
+    #                 output = self.model(x)
+
+    #                 loss = self.loss(output, y)
+    #                 self.optimizer.zero_grad()
+    #                 loss.backward()
+    #                 self.optimizer.step()
+
+    #     # self.model.cpu()
+
+    #     if self.learning_rate_decay:
+    #         self.learning_rate_scheduler.step()
+
+    #     self.train_time_cost['num_rounds'] += 1
+    #     self.train_time_cost['total_cost'] += time.time() - start_time
+class Clientp2(Client):
     def __init__(self, args, id, train_samples, test_samples, **kwargs):
         super().__init__(args, id, train_samples, test_samples, **kwargs)
         # p1
         self.p1_local_soft_labels = None  # 本地软标签
         #本地各个类别的数量
         self.p1_local_nums_per_class = None
-        self.kl_threshold=args.kl_threshold  # KL散度判未知的阈值
+        self.kl_threshold = args.kl_threshold  # KL散度判未知的阈值
         self.caculate_local_nums_per_class()
-        print(f"Client {self.id} local nums per class: {self.p1_local_nums_per_class}")
+        print(f"P2Client {self.id} local nums per class: {self.p1_local_nums_per_class}")
         #print("\nClient p1 initialized.")
+        
+        # 新增：KL损失相关参数
+        self.kl_alpha = getattr(args, 'kl_alpha', 0.5)  # KL损失权重，默认0.3
+        self.kl_temperature = getattr(args, 'kl_temperature', 1.0)  # 温度参数，默认1.0
+        
 
-    def train(self,warmup=False):
+    def caculate_local_nums_per_class(self):
+        # 假设这是原方法，用于计算本地每个类别的样本数
+        # 这里需根据实际数据加载实现，示例占位
+        from collections import Counter
+        # 伪代码：统计train_samples的标签分布
+        labels = [label for _, label in self.train_samples]  # 假设train_samples是[(data, label), ...]
+        self.p1_local_nums_per_class = Counter(labels)
+
+    # def compute_kl_loss(self, logits):
+    #     """计算KL损失"""
+    #     if self.p1_local_soft_labels is None:
+    #         return torch.tensor(0.0, device=logits.device)
+        
+    #     # 软化学生输出 (log_softmax for KLDivLoss)
+    #     student_log_soft = F.log_softmax(logits / self.kl_temperature, dim=1)
+    #     # 教师软标签 (detach以防梯度传播)
+    #     teacher_soft = self.p1_local_soft_labels / self.kl_temperature
+        
+    #     # KL散度: F.kl_div(input=log_p, target=q, reduction='batchmean')
+    #     kl = F.kl_div(student_log_soft, teacher_soft, reduction='batchmean')
+    #     kl *= (self.kl_temperature ** 2)  # 温度补偿
+        
+    #     return kl
+    def compute_kl_loss(self, logits, y):
+        """ 其实是教师模型的软标签与学生模型输出的KL散度"""
+        """计算KL损失"""
+        if self.p1_local_soft_labels is None:
+            return torch.tensor(0.0, device=logits.device)
+        
+        # 确保 y 是 long tensor
+        y = y.long()
+        
+        # 为批次构建教师软标签 [batch_size, num_classes]
+        batch_size = logits.size(0)
+        num_classes = logits.size(1)
+        teacher_soft_batch = torch.zeros(batch_size, num_classes, device=logits.device)
+        
+        for i in range(batch_size):
+            class_idx = y[i].item()
+            if class_idx in self.p1_local_soft_labels:
+                teacher_soft_batch[i] = self.p1_local_soft_labels[class_idx].detach().clone()
+            else:
+                # 如果类别不存在，回退到均匀分布或零损失样本
+                teacher_soft_batch[i] = torch.full((num_classes,), 1.0 / num_classes, device=logits.device)
+        
+        # 软化学生输出 (log_softmax for KLDivLoss)
+        student_log_soft = F.log_softmax(logits / self.kl_temperature, dim=1)
+        
+        # 教师软标签 (已detach，无需重复)
+        teacher_soft = teacher_soft_batch / self.kl_temperature
+        
+        # KL散度: F.kl_div(input=log_p, target=q, reduction='batchmean')
+        kl = F.kl_div(student_log_soft, teacher_soft, reduction='batchmean')
+        kl *= (self.kl_temperature ** 2)  # 温度补偿
+        
+        return kl
+
+    def train(self, warmup=False, global_soft_labels=None):
+        # 更新全局软标签（如果传入）
+        if global_soft_labels is not None:
+            self.global_soft_labels = global_soft_labels.to(self.device) if torch.is_tensor(global_soft_labels) else torch.tensor(global_soft_labels).to(self.device)
+        
         trainloader = self.load_train_data()
         # self.model.to(self.device)
         self.model.train()
@@ -32,7 +169,6 @@ class Clientp1(Client):
         max_local_epochs = self.local_epochs
         if self.train_slow:
             max_local_epochs = np.random.randint(1, max_local_epochs // 2)
-
 
         #预热阶段的训练
         if warmup:
@@ -67,9 +203,21 @@ class Clientp1(Client):
                         time.sleep(0.1 * np.abs(np.random.rand()))
                     output = self.model(x)
 
-                    loss = self.loss(output, y)
+                    # 原CE损失
+                    ce_loss = self.loss(output, y)
+                    
+                    
+                    
+                    # 新增：KL损失（仅在非预热阶段）
+                    kl_loss = self.compute_kl_loss(output,y)
+                    
+                    # 总损失
+                    total_loss = ce_loss + self.kl_alpha * kl_loss
+                    # print('Client {} Epoch {} Batch {} CE Loss: {:.4f} KL Loss: {:.4f} total loss: {:.4f}'
+                    #       .format(self.id, epoch, i, ce_loss.item(),kl_loss.item(), total_loss.item()))
+                    
                     self.optimizer.zero_grad()
-                    loss.backward()
+                    total_loss.backward()
                     self.optimizer.step()
 
         # self.model.cpu()
@@ -79,7 +227,7 @@ class Clientp1(Client):
 
         self.train_time_cost['num_rounds'] += 1
         self.train_time_cost['total_cost'] += time.time() - start_time
-    
+
 
     def compute_local_soft_labels(self):
         """
@@ -352,3 +500,28 @@ class Clientp1(Client):
         Q_binary = np.array([1 if q == known_cluster else 0 for q in Q])
 
         return Q_binary
+    
+    def train_metrics(self):
+        trainloader = self.load_train_data()
+        # self.model = self.load_model('model')
+        # self.model.to(self.device)
+        self.model.eval()
+
+        train_num = 0
+        losses = 0
+        with torch.no_grad():
+            for x, y in trainloader:
+                if type(x) == type([]):
+                    x[0] = x[0].to(self.device)
+                else:
+                    x = x.to(self.device)
+                y = y.to(self.device)
+                output = self.model(x)
+                loss = self.loss(output, y)
+                train_num += y.shape[0]
+                losses += loss.item() * y.shape[0]
+
+        # self.model.cpu()
+        # self.save_model(self.model, 'model')
+
+        return losses, train_num

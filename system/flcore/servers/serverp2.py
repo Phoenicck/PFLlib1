@@ -5,19 +5,19 @@ import torch
 import copy
 import logging
 import sys
-from flcore.clients.clientp1 import Clientp1
+from flcore.clients.clientp2 import Clientp2
 from flcore.servers.serverbase import Server
 from threading import Thread
 
 
-class Fedp1(Server):
+class Fedp2(Server):
     def __init__(self, args, times):
         super().__init__(args, times)
 
         # select slow clients
         self.set_slow_clients()
-        self.set_clients(Clientp1)
-        print("\n-------------FedP1 Algorithm-------------")
+        self.set_clients(Clientp2)
+        print("\n-------------FedP2 Algorithm-------------")
         print(f"\nJoin ratio / total clients: {self.join_ratio} / {self.num_clients}")
         print("Finished creating server and clients.")
 
@@ -112,7 +112,7 @@ class Fedp1(Server):
 
         if self.num_new_clients > 0:
             self.eval_new_clients = True
-            self.set_new_clients(Clientp1)
+            self.set_new_clients(Clientp2)
             print(f"\n-------------Fine tuning round-------------")
             print("\nEvaluate new clients")
             self.evaluate()
@@ -237,20 +237,7 @@ class Fedp1(Server):
         #self.evaluate1()
         print('-'*25, 'time cost', '-'*25, time.time() - s_t)
     
-    def load_model(self,epoch=None):
-        # 个性化加载模型
-        if epoch is None:
-            model_path = os.path.join("models", self.dataset)
-            model_path = os.path.join(model_path, self.algorithm + "_server" + ".pt")
-            #model_path='./models/Cifar10/backup_CNN/Fedp1_server.pt'
-        else:
-            model_path = os.path.join("models", self.dataset)
-            model_file = f"{self.algorithm}_server_best_epoch{epoch}.pt"
-            model_path = os.path.join(model_path, model_file)
-
-        print(f"Load model from {model_path}")
-        assert (os.path.exists(model_path))
-        self.global_model = torch.load(model_path)
+    
 
     # 计算全局软标签
     def compute_global_soft_labels(self):
@@ -323,6 +310,7 @@ class Fedp1(Server):
         if epoch is None:
             file_path = os.path.join("softlabels", self.dataset)
             file_path = os.path.join(file_path, self.algorithm + "_server" + ".pt")
+            # file_path='./softlabels/Cifar10/Fedp2_server_best_epoch85.pt'
         else:
             file_path = os.path.join("softlabels", self.dataset)
             file_name = f"{self.algorithm}_server_best_epoch{epoch}.pt"
@@ -333,4 +321,18 @@ class Fedp1(Server):
         self.p1_global_soft_labels_per_class = torch.load(file_path)
         print("Loaded global soft labels:")
         print(self.p1_global_soft_labels_per_class)
-        
+    
+    def load_model(self,epoch=None):
+        # 个性化加载模型
+        if epoch is None:
+            model_path = os.path.join("models", self.dataset)
+            model_path = os.path.join(model_path, self.algorithm + "_server" + ".pt")
+            # model_path='./models/Cifar10/Fedp2_server_best_epoch85.pt'
+        else:
+            model_path = os.path.join("models", self.dataset)
+            model_file = f"{self.algorithm}_server_best_epoch{epoch}.pt"
+            model_path = os.path.join(model_path, model_file)
+
+        print(f"Load model from {model_path}")
+        assert (os.path.exists(model_path))
+        self.global_model = torch.load(model_path)
