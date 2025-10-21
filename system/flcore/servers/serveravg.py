@@ -170,6 +170,7 @@ class FedAvg(Server):
         if epoch is None:
             model_path = os.path.join("models", self.dataset)
             model_path = os.path.join(model_path, self.algorithm + "_server" + ".pt")
+            #model_path = "./models/Cifar10/backup_CNN/FedAvg_server.pt"
         else:
             model_path = os.path.join("models", self.dataset)
             model_file = f"{self.algorithm}_server_best_epoch{epoch}.pt"

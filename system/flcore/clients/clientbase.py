@@ -128,7 +128,7 @@ class Client(object):
         y_true = np.concatenate(y_true, axis=0)
 
         auc = metrics.roc_auc_score(y_true, y_prob, average='micro')
-        
+        #print(f"Client {self.id} Test Accuracy: {test_acc*1.0/test_num:.4f}, AUC: {auc:.4f}")
         return test_acc, test_num, auc, unknown_test_status
 
     def train_metrics(self):

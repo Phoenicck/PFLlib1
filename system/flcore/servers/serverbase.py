@@ -203,15 +203,15 @@ class Server(object):
         unknown_test_statuses=[]
         for c in self.clients:
             #FEDAVG
-            # ct, ns, auc ,unknown_test_status= c.test_metrics()
-            # unknown_test_statuses.append(unknown_test_status)
+            ct, ns, auc ,unknown_test_status= c.test_metrics()
+            unknown_test_statuses.append(unknown_test_status)
             #FEDP1
-            if warmup:
-                #print(678368716873)
-                ct, ns, auc = c.test_metrics(warmup)
-            else:
-                ct, ns, auc ,unknown_test_status= c.test_metrics(warmup)
-                unknown_test_statuses.append(unknown_test_status)
+            # if warmup:
+            #     #print(678368716873)
+            #     ct, ns, auc = c.test_metrics(warmup)
+            # else:
+            #     ct, ns, auc ,unknown_test_status= c.test_metrics(warmup)
+            #     unknown_test_statuses.append(unknown_test_status)
             tot_correct.append(ct*1.0)
             tot_auc.append(auc*ns)
             num_samples.append(ns)

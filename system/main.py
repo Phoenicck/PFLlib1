@@ -54,11 +54,15 @@ def run(args):
         elif model_str == "ResNet18":
             print(f"num_classes: {args.num_classes}")
             args.model = torchvision.models.resnet18(pretrained=False, num_classes=args.num_classes)
+            #print('--- ResNet18 model created ---')
             
             # 输入通道数修改1
             if args.in_channel != 3:
+                #print('--- ResNet18 model created ---')
                 args.model.conv1 = nn.Conv2d(args.in_channel, 64, kernel_size=7, stride=2, padding=3, bias=False)
             args.model = args.model.to(args.device)
+            #print('--- ResNet18 model created ---')
+            #print(args.in_channel)
             #args.model = ResNet18(num_classes=args.num_classes, in_channel=args.in_channel).to(args.device)
             # args.model = torchvision.models.resnet18(pretrained=True).to(args.device)
             # feature_dim = list(args.model.fc.parameters())[0].shape[1]
