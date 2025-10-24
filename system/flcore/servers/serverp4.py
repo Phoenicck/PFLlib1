@@ -10,7 +10,7 @@ from flcore.servers.serverbase import Server
 from threading import Thread
 
 
-class Fedp3(Server):
+class Fedp4(Server):
     def __init__(self, args, times):
         super().__init__(args, times)
 

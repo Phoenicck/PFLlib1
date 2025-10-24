@@ -15,6 +15,7 @@ from flcore.servers.serveravg import FedAvg
 from flcore.servers.serverp1 import Fedp1
 from flcore.servers.serverp2 import Fedp2
 from flcore.servers.serverp3 import Fedp3
+from flcore.servers.serverp4 import Fedp4
 
 from flcore.trainmodel.models import *
 
@@ -114,6 +115,12 @@ def run(args):
             args.model.fc = nn.Identity()
             args.model = BaseHeadSplit(args.model, args.head)
             server = Fedp3(args, i)
+
+        elif args.algorithm == "Fedp4":
+            args.head = copy.deepcopy(args.model.fc)
+            args.model.fc = nn.Identity()
+            args.model = BaseHeadSplit(args.model, args.head)
+            server = Fedp4(args, i)
 
         else:
             raise NotImplementedError
