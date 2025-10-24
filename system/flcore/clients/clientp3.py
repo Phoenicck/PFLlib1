@@ -12,76 +12,8 @@ from sklearn.metrics import roc_auc_score, average_precision_score
 from sklearn.mixture import BayesianGaussianMixture
 import matplotlib.pyplot as plt
 
-# class Clientp2(Client):
-#     def __init__(self, args, id, train_samples, test_samples, **kwargs):
-#         super().__init__(args, id, train_samples, test_samples, **kwargs)
-#         # p1
-#         self.p1_local_soft_labels = None  # 本地软标签
-#         #本地各个类别的数量
-#         self.p1_local_nums_per_class = None
-#         self.kl_threshold=args.kl_threshold  # KL散度判未知的阈值
-#         self.caculate_local_nums_per_class()
-#         print(f"P2Client {self.id} local nums per class: {self.p1_local_nums_per_class}")
-        #print("\nClient p1 initialized.")
 
-    # def train(self,warmup=False):
-    #     trainloader = self.load_train_data()
-    #     # self.model.to(self.device)
-    #     self.model.train()
-        
-    #     start_time = time.time()
-
-    #     max_local_epochs = self.local_epochs
-    #     if self.train_slow:
-    #         max_local_epochs = np.random.randint(1, max_local_epochs // 2)
-
-
-    #     #预热阶段的训练
-    #     if warmup:
-    #         # print("warmup\n")
-    #         for epoch in range(max_local_epochs):
-    #             for i, (x, y) in enumerate(trainloader):
-    #                 if type(x) == type([]):
-    #                     x[0] = x[0].to(self.device)
-    #                 else:
-    #                     x = x.to(self.device)
-    #                 y = y.to(self.device)
-    #                 #print(y)
-    #                 if self.train_slow:
-    #                     time.sleep(0.1 * np.abs(np.random.rand()))
-    #                 output = self.model(x)
-    #                 # print("output before softmax:", output)
-    #                 # print("y:", y)
-    #                 loss = self.loss(output, y)
-    #                 self.optimizer.zero_grad()
-    #                 loss.backward()
-    #                 self.optimizer.step()
-    #     else:
-    #         # print("normal train\n")
-    #         for epoch in range(max_local_epochs):
-    #             for i, (x, y) in enumerate(trainloader):
-    #                 if type(x) == type([]):
-    #                     x[0] = x[0].to(self.device)
-    #                 else:
-    #                     x = x.to(self.device)
-    #                 y = y.to(self.device)
-    #                 if self.train_slow:
-    #                     time.sleep(0.1 * np.abs(np.random.rand()))
-    #                 output = self.model(x)
-
-    #                 loss = self.loss(output, y)
-    #                 self.optimizer.zero_grad()
-    #                 loss.backward()
-    #                 self.optimizer.step()
-
-    #     # self.model.cpu()
-
-    #     if self.learning_rate_decay:
-    #         self.learning_rate_scheduler.step()
-
-    #     self.train_time_cost['num_rounds'] += 1
-    #     self.train_time_cost['total_cost'] += time.time() - start_time
-class Clientp2(Client):
+class Clientp3(Client):
     def __init__(self, args, id, train_samples, test_samples, **kwargs):
         super().__init__(args, id, train_samples, test_samples, **kwargs)
         # p1
@@ -90,12 +22,13 @@ class Clientp2(Client):
         self.p1_local_nums_per_class = None
         self.kl_threshold = args.kl_threshold  # KL散度判未知的阈值
         self.caculate_local_nums_per_class()
-        print(f"P2Client {self.id} local nums per class: {self.p1_local_nums_per_class}")
+        print(f"P3Client {self.id} local nums per class: {self.p1_local_nums_per_class}")
         #print("\nClient p1 initialized.")
         
         # 新增：KL损失相关参数
-        self.kl_alpha = getattr(args, 'kl_alpha', 0.4)  # KL损失权重，默认0.3
+        self.kl_alpha = getattr(args, 'kl_alpha', 0.3)  # KL损失权重，默认0.3
         self.kl_temperature = getattr(args, 'kl_temperature', 1.0)  # 温度参数，默认1.0
+        self.smoothing = getattr(args, 'smoothing', 0.25)
         
 
     def caculate_local_nums_per_class(self):
@@ -151,10 +84,12 @@ class Clientp2(Client):
         
         # KL散度: F.kl_div(input=log_p, target=q, reduction='batchmean')
         kl = F.kl_div(student_log_soft, teacher_soft, reduction='batchmean')
+        #print(kl)
         kl *= (self.kl_temperature ** 2)  # 温度补偿
         
         return kl
 
+   
     def train(self, warmup=False, global_soft_labels=None):
         # 更新全局软标签（如果传入）
         if global_soft_labels is not None:
@@ -180,18 +115,21 @@ class Clientp2(Client):
                     else:
                         x = x.to(self.device)
                     y = y.to(self.device)
+                    
                     #print(y)
                     if self.train_slow:
                         time.sleep(0.1 * np.abs(np.random.rand()))
                     output = self.model(x)
                     # print("output before softmax:", output)
                     # print("y:", y)
-                    loss = self.loss(output, y)
+
+                    loss = self.loss(output, y)  # 预热用原CE，无平滑
                     self.optimizer.zero_grad()
                     loss.backward()
                     self.optimizer.step()
         else:
             # print("normal train\n")
+            num_classes = 6
             for epoch in range(max_local_epochs):
                 for i, (x, y) in enumerate(trainloader):
                     if type(x) == type([]):
@@ -203,16 +141,20 @@ class Clientp2(Client):
                         time.sleep(0.1 * np.abs(np.random.rand()))
                     output = self.model(x)
 
-                    # 原CE损失
-                    ce_loss = self.loss(output, y)
+                    # 新增：生成平滑标签 [batch_size, num_classes]
+                    batch_size = y.size(0)
+                    smooth_y = torch.full((batch_size, num_classes), self.smoothing / (num_classes - 1), device=self.device)
+                    smooth_y.scatter_(1, y.unsqueeze(1), 1.0 - self.smoothing)  # y.unsqueeze(1) 为 [B,1]，scatter到正确类
                     
-                    
+                    # 修改：用平滑标签计算CE损失
+                    ce_loss = F.cross_entropy(output, smooth_y, reduction='mean')
                     
                     # 新增：KL损失（仅在非预热阶段）
-                    kl_loss = self.compute_kl_loss(output,y)
+                    #kl_loss = self.compute_kl_loss(output, y)
                     
                     # 总损失
-                    total_loss = ce_loss + self.kl_alpha * kl_loss
+                    # total_loss = ce_loss + self.kl_alpha * kl_loss
+                    total_loss = ce_loss
                     # print('Client {} Epoch {} Batch {} CE Loss: {:.4f} KL Loss: {:.4f} total loss: {:.4f}'
                     #       .format(self.id, epoch, i, ce_loss.item(),kl_loss.item(), total_loss.item()))
                     
@@ -314,7 +256,7 @@ class Clientp2(Client):
                         #print("Client p1 test metrics with unknown detection.")
                          # 需要插入计算kl散度的代码
                         kl_divs = self.compute_kl_divergence(output,y)
-                       
+                        #print(kl_divs)
                         # 设置一个阈值，假设是0.5，超过这个值的样本被认为是未知类
                         
                         preds = torch.argmax(output, dim=1)

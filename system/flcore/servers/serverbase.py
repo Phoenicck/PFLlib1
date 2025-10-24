@@ -222,6 +222,22 @@ class Server(object):
                 else:
                     ct, ns, auc ,unknown_test_status= c.test_metrics(warmup)
                     unknown_test_statuses.append(unknown_test_status)
+            
+            elif self.algorithm=='Fedp3':
+                if warmup:
+                    #print(678368716873)
+                    ct, ns, auc = c.test_metrics(warmup)
+                else:
+                    ct, ns, auc ,unknown_test_status= c.test_metrics(warmup)
+                    unknown_test_statuses.append(unknown_test_status)
+
+            elif self.algorithm=='Fedp4':
+                if warmup:
+                    #print(678368716873)
+                    ct, ns, auc = c.test_metrics(warmup)
+                else:
+                    ct, ns, auc ,unknown_test_status= c.test_metrics(warmup)
+                    unknown_test_statuses.append(unknown_test_status)
 
             tot_correct.append(ct*1.0)
            
